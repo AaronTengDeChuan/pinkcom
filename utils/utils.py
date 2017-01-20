@@ -143,7 +143,7 @@ def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module):
                                                seq_embeds.view(-1, seq_embeds.shape[-2], seq_embeds.shape[-1]), \
                                                dim=0, index=seq_indices)
     # varname(sorted_seq_embeds) # torch.Size([None, 50, 200])
-    sorted_seq_lens = sorted_seq_lens + torch.tensor(sorted_seq_lens == 0, dtype=torch.int64)
+    sorted_seq_lens = sorted_seq_lens + torch.tensor(sorted_seq_lens == 0, device=sorted_seq_lens.device, dtype=torch.int64)
 
     # Packs a Tensor containing padded sequences of variable length in order to obtain a PackedSequence object
     packed_seq_input = pack_padded_sequence(sorted_seq_embeds, sorted_seq_lens, batch_first=True)
