@@ -81,18 +81,19 @@ class Accurary(object):
 
 if __name__ == "__main__":
     # test Rn@k
-    R10_at_1 = Recall_N_at_K({"N":5, "K":5, "skip":True})
-    y_pred = torch.randn(10,2)
-    y_true = torch.tensor([1,1,0,0,0,0,0,0,0,0])
-    print (y_pred[:,1])
-    print (y_true)
-    print (R10_at_1.ops(y_pred,y_true))
+    # R10_at_1 = Recall_N_at_K({"N":5, "K":5, "skip":True})
+    # y_pred = torch.randn(10,2)
+    # y_true = torch.tensor([1,1,0,0,0,0,0,0,0,0])
+    # print (y_pred[:,1])
+    # print (y_true)
+    # print (R10_at_1.ops(y_pred,y_true))
 
     # test Accurary
     acc = Accurary({})
-    y_pred = torch.randn(2,3,4)
-    y_true = torch.randint(0, 4, (2,3), dtype=torch.int64)
+    y_pred = torch.randn(10,2)
+    y_true = torch.randint(0, 2, (10,), dtype=torch.int64)
     print (y_pred)
+    print (torch.argmax(y_pred,dim=-1))
     print (y_true)
     print (acc.ops(y_pred, y_true))
     print (acc.name)

@@ -16,7 +16,10 @@
                 "params": {
                     "phase": "training",
                     "batch_size": 10,
-                    "shuffle": false
+                    "shuffle": {
+                        "training": true,
+                        "validation": false
+                    }
                 }
             },
             "data_gen": {

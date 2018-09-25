@@ -271,7 +271,10 @@ def ubuntu_dataloader_gen(data_dict, params):
         "device": None,
         "phase": "training",
         "batch_size": 10,
-        "shuffle": False,
+        "shuffle": {
+            "training": True,
+            "validation": False
+        }
     }
     default_params.update(params)
     device = default_params["device"]
@@ -292,7 +295,7 @@ def ubuntu_dataloader_gen(data_dict, params):
         return tuple([
             DataLoader(utt_res,
                        batch_size=default_params["batch_size"],
-                       shuffle=default_params["shuffle"]),
+                       shuffle=default_params["shuffle"][default_params["phase"]]),
             actions
         ])
     else:
