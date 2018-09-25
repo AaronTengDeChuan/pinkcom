@@ -1,0 +1,8 @@
+# ignore all files in any directory named models
+models/
+# ignore all files in any directory named logs
+logs/
+# ignore all files in any directory named .idea
+.idea/
+# ignore all files whose names end with .pyc
+*.pyc
