@@ -77,6 +77,7 @@ def generate_metrics_str(results):
         "metrics", "value", *reduce(lambda x, y: x + [y[0], y[1]], results.items(), []))
     return metric_str
 
+
 def name2function(f_name):
     '''
     :param f_name: the import path of function or class
@@ -91,6 +92,17 @@ def name2function(f_name):
         else:
             modules = __import__(items[0])
         return getattr(modules, items[1])
+
+
+def lower_dict(dic, recursive=False):
+    if isinstance(dic, dict):
+        dic = dict([
+            (
+                k.lower() if isinstance(k, str) else k,
+                lower_dict(v, recursive) if recursive else v
+            )
+            for k, v in dic.items()])
+    return dic
 
 
 def get_sequences_length(sequences, maxlen):

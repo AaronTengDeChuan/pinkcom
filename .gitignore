@@ -4,5 +4,7 @@ models/
 logs/
 # ignore all files in any directory named .idea
 .idea/
+# ignore all files in any directory named data
+data/
 # ignore all files whose names end with .pyc
 *.pyc

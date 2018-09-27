@@ -40,9 +40,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config_file = args.config
-    trainerParams = json.load(open(config_file, 'r'))
+    # lower the configuration parameters dict
+    trainerParams = utils.lower_dict(json.load(open(config_file, 'r')), recursive=True)
 
     logger = utils.create_logger(trainerParams["global"]["log_file"])
+
+    logger.info(json.dumps(trainerParams, indent=4))
 
     if args.train:
         train(trainerParams, evaluate=args.evaluate)

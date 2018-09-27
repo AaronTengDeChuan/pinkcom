@@ -296,9 +296,11 @@ class Trainer(object):
                         self.early_stopping_count = 0
                         self.best_epoch = epoch
                         min_loss = valid_loss
-                        self.save_model()
                         logger.info("\n| epoch {:3d} | batch {:5d} | New record has been achieved. |".format(epoch,
                                                                                                              batch_in_epoch + 1))
+                        logger.info("Saving model...")
+                        self.save_model()
+                        logger.info("Best model is saved in '{}'".format(self._generate_model_name()))
                     elif "early_stopping" in training_params and training_params["early_stopping"] > 0:
                         # early stopping
                         self.early_stopping_count += 1

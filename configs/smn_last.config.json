@@ -89,15 +89,23 @@
                 {   "function": "metrics.metric.Accurary", "params": {} }
             ],
             "validation": [
+                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "AN": 2, "K": 1, "skip": true} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 1, "skip": true} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 2, "skip": true} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 5, "skip": true} },
+                {   "function": "metrics.metric.MAP_in_N", "params": {"N": 10, "skip": true} },
+                {   "function": "metrics.metric.MRR_in_N", "params": {"N": 10, "skip": true} },
+                {   "function": "metrics.metric.Precision_N_at_K", "params": {"N": 10, "K": 1, "skip": true} },
                 {   "function": "metrics.metric.Accurary", "params": {} }
             ],
             "evaluate": [
+                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "AN": 2, "K": 1, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 1, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 2, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 5, "skip": false} },
+                {   "function": "metrics.metric.MAP_in_N", "params": {"N": 10, "skip": false} },
+                {   "function": "metrics.metric.MRR_in_N", "params": {"N": 10, "skip": false} },
+                {   "function": "metrics.metric.Precision_N_at_K", "params": {"N": 10, "K": 1, "skip": false} },
                 {   "function": "metrics.metric.Accurary", "params": {} }
             ]
         },
