@@ -4,6 +4,7 @@ import torch
 from utils import utils
 from utils.utils import varname
 import logging
+import codecs
 
 logger = utils.get_logger()
 
@@ -206,29 +207,39 @@ class Accurary(object):
 
 
 if __name__ == "__main__":
-    # test Rn@k
-    R10_at_1 = Recall_N_at_K({"N":5,"AN":2, "K":1, "skip":False})
-    P_at_k = Precision_N_at_K({"N": 5, "K": 4, "skip": False})
-    mrr = MRR_in_N({"N": 5, "skip": False})
-    map = MAP_in_N({"N": 5, "skip": False})
-    y_pred = torch.randn(10,2)
-    y_true = torch.tensor([1,0,0,0,0,1,0,0,0,0])
-    print (y_pred[:,1])
-    print (y_true)
-    print (R10_at_1.ops(y_pred,y_true))
-    print (P_at_k.ops(y_pred, y_true))
-    print (mrr.ops(y_pred, y_true))
-    print (map.ops(y_pred, y_true))
+    # test actual output
+    # ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
+    douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
+    # score_file = "/Users/aaron_teng/Documents/SCIR/HPC/score.test"
+    with codecs.open(douban_score_file, 'r', encoding="utf-8") as f:
+        scores = [[float(line.split('\t')[0]), int(line.split('\t')[1])] for line in f.read().strip().split('\n')]
+        scores = scores[:-(len(scores) % 10)]
+        scores = list(zip(*scores))
+    y_pred = torch.stack([torch.tensor(scores[0])] * 2, dim=-1)
+    y_true = torch.tensor(scores[1])
+    print (y_pred.shape, y_pred.dtype)
+    print (y_true.shape, y_true.dtype)
+    # print (y_pred)
+    # print (y_true)
 
+    # r2_at_1 = Recall_N_at_K({"N": 10, "AN": 2, "K": 1, "skip": False}) # for ubuntu
+    r10_at_1 = Recall_N_at_K({"N": 10, "K": 1, "skip": False})
+    r10_at_2 = Recall_N_at_K({"N": 10, "K": 2, "skip": False})
+    r10_at_5 = Recall_N_at_K({"N": 10, "K": 5, "skip": False})
+    map = MAP_in_N({"N": 10, "skip": False})
+    mrr = MRR_in_N({"N": 10, "skip": False})
+    p_at_1 = Precision_N_at_K({"N": 10, "K": 1, "skip": False})
+    acc = Accurary({})
 
-    # test Accurary
-    # acc = Accurary({})
-    # y_pred = torch.randn(500000,2)
-    # y_true = torch.randint(0, 2, (500000,), dtype=torch.int64)
-    # # print (y_pred)
-    # # print (torch.argmax(y_pred,dim=-1))
-    # # print (y_true)
-    # correct, total = acc.ops(y_pred, y_true)
-    # print (correct, total)
-    # print(correct / total)
-    # print (acc.name)
+    metrics_dict = {
+        # r2_at_1.name:   r2_at_1.ops(y_pred, y_true), # for ubuntu
+        r10_at_1.name:  r10_at_1.ops(y_pred, y_true),
+        r10_at_2.name:  r10_at_2.ops(y_pred, y_true),
+        r10_at_5.name:  r10_at_5.ops(y_pred, y_true),
+        map.name:       map.ops(y_pred, y_true),
+        mrr.name:       mrr.ops(y_pred, y_true),
+        p_at_1.name:    p_at_1.ops(y_pred, y_true),
+        acc.name:       acc.ops(y_pred, y_true)
+    }
+
+    print (utils.generate_metrics_str(metrics_dict, verbose=True))

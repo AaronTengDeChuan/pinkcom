@@ -68,13 +68,25 @@ def varname(p):
                 var_name = str(m.group(1))
                 print("{:<40}{}".format(var_name + ':', p.shape))
 
-def generate_metrics_str(results):
+def generate_metrics_str(results, verbose=False):
     '''
-    :param results: dict( {name: value, ...} )
+    :param results: if verbose is True, dict( {name: value, ...} ) form, otherwise dict( {name: [mv, mn], ...} )
     :return: str
     '''
-    metric_str = ("| {:^20} | {:^20} |\n" + "\n".join(["| {:^20} | {:^20.4f} |" for i in range(len(results))])).format(
-        "metrics", "value", *reduce(lambda x, y: x + [y[0], y[1]], results.items(), []))
+    if verbose:
+        beauty_line = '-' * 93
+        metric_str = (beauty_line + '\n' + "| {:^20} | {:^20} | {:^20} | {:^20} |\n" + beauty_line + '\n' + "\n".join(
+            ["| {:^20} | {:^20.5f} | {:^20d} | {:^20.5f} |" for i in range(len(results))]) + '\n' + beauty_line).format(
+            "Metrics",
+            "Accumulation",
+            "Count",
+            "Value", *reduce(
+                lambda x, y: x + [y[0], y[1][0], y[1][1], y[1][0] / y[1][1]], results.items(), []))
+    else:
+        beauty_line = '-' * 47
+        metric_str = (beauty_line + '\n' + "| {:^20} | {:^20} |\n" + beauty_line + '\n' + "\n".join(
+            ["| {:^20} | {:^20.5f} |" for i in range(len(results))]) + '\n' + beauty_line).format(
+            "Metrics", "Value", *reduce(lambda x, y: x + [y[0], y[1]], results.items(), []))
     return metric_str
 
 
