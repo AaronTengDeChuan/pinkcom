@@ -172,7 +172,7 @@ class Trainer(object):
 
     def generate_data_managers(self):
         data_manager_params = deepcopy(self.trainerParams["data_manager"])
-        data_manager_params["dataloader_gen"]["params"]["batch_size"] = self.trainerParams["global"]["batch_size"]
+        data_manager_params["dataloader_gen"]["params"]["batch_size"]["training"] = self.trainerParams["global"]["batch_size"]
         # put model on specified computing device
         data_manager_params["dataloader_gen"]["params"]["device"] = self.device
         # training data manager

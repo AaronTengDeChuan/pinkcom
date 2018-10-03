@@ -57,8 +57,8 @@ class Recall_N_at_K(object):
         x = len(y_pred) // self.N
         total_recall = 0.
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN]
+            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
             total = sum(y_t)
             c = list(zip(y_p, y_t))
             c = sorted(c, key=lambda x: x[0], reverse=True)
@@ -96,8 +96,8 @@ class MAP_in_N(object):
         x = len(y_pred) // self.N
         APs = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN]
+            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
             c = list(zip(y_p, y_t))
             c = sorted(c, key=lambda x: x[0], reverse=True)
             num_refs = 0
@@ -138,8 +138,8 @@ class MRR_in_N(object):
         x = len(y_pred) // self.N
         RRs = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN]
+            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
             c = list(zip(y_p, y_t))
             c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
             assert 1 in c
@@ -177,8 +177,8 @@ class Precision_N_at_K(object):
         x = len(y_pred) // self.N
         Ps = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN]
+            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
             c = list(zip(y_p, y_t))
             c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
             Ps += 1.0 if 1 in c[:self.K] else 0

@@ -82,7 +82,7 @@ class SMNModel(nn.Module):
         self.xavier_normal = nn.init.xavier_normal_
         ## by kaiming he for relu
         self.kaiming_normal = nn.init.kaiming_normal_
-        self.init_parameters()
+        # self.init_parameters()
 
     def init_parameters(self):
         # TODO: test the performance with initialization or without initialization

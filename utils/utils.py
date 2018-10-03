@@ -294,13 +294,17 @@ def ubuntu_dataloader_gen(data_dict, params):
     default_params = {
         "device": None,
         "phase": "training",
-        "batch_size": 10,
+        "batch_size": {},
         "shuffle": {
             "training": True,
             "validation": False
         }
     }
     default_params.update(params)
+    if "validation" not in default_params["batch_size"]:
+        default_params["batch_size"]["validation"] = default_params["batch_size"]["training"]
+    if "evaluate" not in default_params["batch_size"]:
+        default_params["batch_size"]["evaluate"] = default_params["batch_size"]["training"]
     device = default_params["device"]
     # TODO: torch.tensor() or torch.from_numpy()
     # torch.tensor(): copy
@@ -318,7 +322,7 @@ def ubuntu_dataloader_gen(data_dict, params):
         )
         return tuple([
             DataLoader(utt_res,
-                       batch_size=default_params["batch_size"],
+                       batch_size=default_params["batch_size"][default_params["phase"]],
                        shuffle=default_params["shuffle"][default_params["phase"]]),
             actions
         ])
@@ -332,7 +336,7 @@ def ubuntu_dataloader_gen(data_dict, params):
         )
         return tuple([
             DataLoader(utt_res,
-                       batch_size=default_params["batch_size"],
+                       batch_size=default_params["batch_size"][default_params["phase"]],
                        shuffle=False),
         ])
 
