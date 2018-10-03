@@ -245,7 +245,7 @@ def DAM_ubuntu_data_load(params):
     default_params = {
         "dataset_dir": None,
         "phase": "training",
-        "training_files": ["data.pkl"],
+        "training_files": ["training_data.pkl"],
         "evaluate_files": ["evaluate_data.pkl"],
         "eos_id": 28270,
         "max_sentence_len": 50
@@ -259,26 +259,33 @@ def DAM_ubuntu_data_load(params):
     if default_params["phase"] in ["training", "validation"]:
         with open(os.path.join(default_params["dataset_dir"], training_files[0]), 'rb') as f:
             training_data, validation_data, evaluate_data = pickle.load(f)
-        with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'wb') as f:
+        with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
             pickle.dump(evaluate_data, f)
         inputs['c'] = validation_data['c'] + training_data['c']
+        inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
         inputs['r'] = validation_data['r'] + training_data['r']
         inputs['y'] = validation_data['y'] + training_data['y']
+        with open(os.path.join(default_params["dataset_dir"], "training_data.pkl"), 'wb') as f:
+            pickle.dump(inputs, f)
     else:
         with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'rb') as f:
             evaluate_data = pickle.load(f)
         inputs['c'] = evaluate_data['c']
+        inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
         inputs['r'] = evaluate_data['r']
         inputs['y'] = evaluate_data['y']
+        with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
+            pickle.dump(inputs, f)
 
     # prepare tf dataset
+    inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
     history, history_len = multi_sequences_padding(inputs['c'], max_sentence_len=default_params["max_sentence_len"])
     true_utt_len = np.array(get_sequences_length(inputs['r'], maxlen=default_params["max_sentence_len"]),
                             dtype=np_dtype)
     true_utt = np.array(pad_sequences(inputs['r'], padding='post', maxlen=default_params["max_sentence_len"]),
                         dtype=np_dtype)
     history, history_len = np.array(history, dtype=np_dtype), np.array(history_len, dtype=np_dtype)
-    labels = np.array(inputs['r'], dtype=np_dtype)
+    labels = np.array(inputs['y'], dtype=np_dtype)
 
     if default_params["phase"] in ["training", "validation"]:
         return {
@@ -366,13 +373,17 @@ def DAM_ubuntu_dataloader_gen(data_dict, params):
     default_params = {
         "device": None,
         "phase": "training",
-        "batch_size": 10,
+        "batch_size": {},
         "shuffle": {
             "training": True,
             "validation": False
         }
     }
     default_params.update(params)
+    if "validation" not in default_params["batch_size"]:
+        default_params["batch_size"]["validation"] = default_params["batch_size"]["training"]
+    if "evaluate" not in default_params["batch_size"]:
+        default_params["batch_size"]["evaluate"] = default_params["batch_size"]["training"]
     device = default_params["device"]
     utt_res_labels = TensorDataset(
         torch.tensor(data_dict["history"], device=device),
@@ -388,7 +399,7 @@ def DAM_ubuntu_dataloader_gen(data_dict, params):
 
     return tuple([
         DataLoader(utt_res_labels,
-                   batch_size=default_params["batch_size"],
+                   batch_size=default_params["batch_size"][default_params["phase"]],
                    shuffle=shuffle),
     ])
 
@@ -397,13 +408,17 @@ def ubuntu_dataloader_gen(data_dict, params):
     default_params = {
         "device": None,
         "phase": "training",
-        "batch_size": 10,
+        "batch_size": {},
         "shuffle": {
             "training": True,
             "validation": False
         }
     }
     default_params.update(params)
+    if "validation" not in default_params["batch_size"]:
+        default_params["batch_size"]["validation"] = default_params["batch_size"]["training"]
+    if "evaluate" not in default_params["batch_size"]:
+        default_params["batch_size"]["evaluate"] = default_params["batch_size"]["training"]
     device = default_params["device"]
     # TODO: torch.tensor() or torch.from_numpy()
     # torch.tensor(): copy
@@ -421,7 +436,7 @@ def ubuntu_dataloader_gen(data_dict, params):
         )
         return tuple([
             DataLoader(utt_res,
-                       batch_size=default_params["batch_size"],
+                       batch_size=default_params["batch_size"][default_params["phase"]],
                        shuffle=default_params["shuffle"][default_params["phase"]]),
             actions
         ])
@@ -435,7 +450,7 @@ def ubuntu_dataloader_gen(data_dict, params):
         )
         return tuple([
             DataLoader(utt_res,
-                       batch_size=default_params["batch_size"],
+                       batch_size=default_params["batch_size"][default_params["phase"]],
                        shuffle=False),
         ])
 

@@ -8,6 +8,7 @@
                     "phase": "training",
                     "training_files": ["data.pkl"],
                     "evaluate_files": ["evaluate_data.pkl"],
+                    "eos_id": 28270,
                     "max_sentence_len": 50
                 }
             },
@@ -15,7 +16,10 @@
                 "function": "utils.utils.DAM_ubuntu_dataloader_gen",
                 "params": {
                     "phase": "training",
-                    "batch_size": 10,
+                    "batch_size": {
+                        "validation": 100,
+                        "evaluate": 100
+                    },
                     "shuffle": {
                         "training": true,
                         "validation": false
@@ -23,21 +27,15 @@
                 }
             },
             "data_gen": {
-                "function": "utils.utils.ubuntu_data_gen",
-                "params": {
-                    "phase": "training",
-                    "negative_samples": {
-                        "training": 1,
-                        "validation": 9
-                    }
-                }
+                "function": "utils.utils.DAM_ubuntu_data_gen",
+                "params": {}
             }
         },
     "model":
         {
             "model_path": "nets.SMN.SMNModel",
             "params": {
-                "vocabulary_size": 434511,
+                "vocabulary_size": 434513,
                 "embedding_dim": 200,
                 "hidden_size": 200,
                 "max_num_utterance": 10,
@@ -56,7 +54,7 @@
     "global":
         {
             "device": "cuda",
-            "batch_size": 40,
+            "batch_size": 100,
             "log_file": "logs/smn/smn_last.log"
         },
     "training":
@@ -64,7 +62,7 @@
             "emb_load": {
                 "function": "utils.utils.ubuntu_emb_load",
                 "params": {
-                    "path": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/SMN/Ubuntu/embedding.pkl"
+                    "path": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/data/data/ubuntu/word_embedding.pkl"
                 }
             },
             "optimizer": {
@@ -74,11 +72,11 @@
                 }
             },
             "continue_train": false,
-            "validation_num": 5000,
+            "validation_num": 500000,
             "num_epochs": 1,
             "early_stopping": 10,
-            "log_interval": 20,
-            "validation_interval": 100,
+            "log_interval": 100,
+            "validation_interval": 1000,
             "model_save_path": "models/SMN",
             "model_prefix": "smn_last"
         },
