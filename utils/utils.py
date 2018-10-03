@@ -258,27 +258,28 @@ def DAM_ubuntu_data_load(params):
     inputs = {}
     if default_params["phase"] in ["training", "validation"]:
         with open(os.path.join(default_params["dataset_dir"], training_files[0]), 'rb') as f:
-            training_data, validation_data, evaluate_data = pickle.load(f)
-        with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
-            pickle.dump(evaluate_data, f)
-        inputs['c'] = validation_data['c'] + training_data['c']
-        inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
-        inputs['r'] = validation_data['r'] + training_data['r']
-        inputs['y'] = validation_data['y'] + training_data['y']
-        with open(os.path.join(default_params["dataset_dir"], "training_data.pkl"), 'wb') as f:
-            pickle.dump(inputs, f)
+            inputs = pickle.load(f)
+        #     training_data, validation_data, evaluate_data = pickle.load(f)
+        # with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
+        #     pickle.dump(evaluate_data, f)
+        # inputs['c'] = validation_data['c'] + training_data['c']
+        # inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
+        # inputs['r'] = validation_data['r'] + training_data['r']
+        # inputs['y'] = validation_data['y'] + training_data['y']
+        # with open(os.path.join(default_params["dataset_dir"], "training_data.pkl"), 'wb') as f:
+        #     pickle.dump(inputs, f)
     else:
         with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'rb') as f:
-            evaluate_data = pickle.load(f)
-        inputs['c'] = evaluate_data['c']
-        inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
-        inputs['r'] = evaluate_data['r']
-        inputs['y'] = evaluate_data['y']
-        with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
-            pickle.dump(inputs, f)
+            inputs = pickle.load(f)
+        #     evaluate_data = pickle.load(f)
+        # inputs['c'] = evaluate_data['c']
+        # inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
+        # inputs['r'] = evaluate_data['r']
+        # inputs['y'] = evaluate_data['y']
+        # with open(os.path.join(default_params["dataset_dir"], "evaluate_data.pkl"), 'wb') as f:
+        #     pickle.dump(inputs, f)
 
     # prepare tf dataset
-    inputs['c'] = split_dialogue_history(inputs['c'], default_params["eos_id"])
     history, history_len = multi_sequences_padding(inputs['c'], max_sentence_len=default_params["max_sentence_len"])
     true_utt_len = np.array(get_sequences_length(inputs['r'], maxlen=default_params["max_sentence_len"]),
                             dtype=np_dtype)

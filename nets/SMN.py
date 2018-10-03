@@ -30,18 +30,18 @@ class SMNModel(nn.Module):
         super(SMNModel, self).__init__()
         # hyperparameters
         embeddings = config["embeddings"] if "embeddings" in config else None
-        self.total_words = config["total_words"] if "total_words" in config else 434511
-        self.rnn_units = config["rnn_units"] if "rnn_units" in config else 200
-        self.word_embedding_size = config["word_embedding_size"] if "word_embedding_size" in config else 200
+        self.vocabulary_size = config["vocabulary_size"] if "vocabulary_size" in config else 434511
+        self.rnn_units = config["hidden_size"] if "hidden_size" in config else 200
+        self.word_embedding_size = config["embedding_dim"] if "embedding_dim" in config else 200
         self.max_num_utterance = config["max_num_utterance"] if "max_num_utterance" in config else 10
         self.max_sentence_len = config["max_sentence_len"] if "max_sentence_len" in config else 50
         self.embeddings_trainable = \
-            config["embeddings_trainable"] if "embeddings_trainable" in config else True
+            config["emb_trainable"] if "emb_trainable" in config else True
         self.device = config["device"]
 
         # build model
         ## Embedding
-        self.embeddings = nn.Embedding(self.total_words, self.word_embedding_size)
+        self.embeddings = nn.Embedding(self.vocabulary_size, self.word_embedding_size)
         if isinstance(embeddings, np.ndarray):
             # TODO: check whether share the storage
             self.embeddings.from_pretrained(torch.tensor(embeddings), freeze=not self.embeddings_trainable)
