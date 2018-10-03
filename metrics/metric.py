@@ -57,8 +57,8 @@ class Recall_N_at_K(object):
         x = len(y_pred) // self.N
         total_recall = 0.
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN]
+            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
             total = sum(y_t)
             c = list(zip(y_p, y_t))
             c = sorted(c, key=lambda x: x[0], reverse=True)
@@ -208,12 +208,12 @@ class Accurary(object):
 
 if __name__ == "__main__":
     # test actual output
-    # ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
-    douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
+    ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
+    # douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
     # score_file = "/Users/aaron_teng/Documents/SCIR/HPC/score.test"
-    with codecs.open(douban_score_file, 'r', encoding="utf-8") as f:
+    with codecs.open(ubuntu_score_file, 'r', encoding="utf-8") as f:
         scores = [[float(line.split('\t')[0]), int(line.split('\t')[1])] for line in f.read().strip().split('\n')]
-        scores = scores[:-(len(scores) % 10)]
+        if len(scores) % 10 != 0: scores = scores[:-(len(scores) % 10)]
         scores = list(zip(*scores))
     y_pred = torch.stack([torch.tensor(scores[0])] * 2, dim=-1)
     y_true = torch.tensor(scores[1])
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # print (y_pred)
     # print (y_true)
 
-    # r2_at_1 = Recall_N_at_K({"N": 10, "AN": 2, "K": 1, "skip": False}) # for ubuntu
+    r2_at_1 = Recall_N_at_K({"N": 10, "AN": 2, "K": 1, "skip": False}) # for ubuntu
     r10_at_1 = Recall_N_at_K({"N": 10, "K": 1, "skip": False})
     r10_at_2 = Recall_N_at_K({"N": 10, "K": 2, "skip": False})
     r10_at_5 = Recall_N_at_K({"N": 10, "K": 5, "skip": False})
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     acc = Accurary({})
 
     metrics_dict = {
-        # r2_at_1.name:   r2_at_1.ops(y_pred, y_true), # for ubuntu
+        r2_at_1.name:   r2_at_1.ops(y_pred, y_true), # for ubuntu
         r10_at_1.name:  r10_at_1.ops(y_pred, y_true),
         r10_at_2.name:  r10_at_2.ops(y_pred, y_true),
         r10_at_5.name:  r10_at_5.ops(y_pred, y_true),

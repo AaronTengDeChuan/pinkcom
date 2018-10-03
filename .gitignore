@@ -6,5 +6,7 @@ logs/
 .idea/
 # ignore all files in any directory named data
 data/
+# ignore all files in any directory named data
+test/
 # ignore all files whose names end with .pyc
 *.pyc

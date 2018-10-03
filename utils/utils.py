@@ -31,7 +31,7 @@ def create_logger(log_file, logger_name=LOGGER_NAME):
     fh = logging.FileHandler(log_file, mode='w')
     fh.setLevel(logging.DEBUG)  # log level of handler
     # 3. output format
-    formatter = logging.Formatter("%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s")
+    formatter = logging.Formatter("%(asctime)s - %(filename)s [line:%(lineno)d] - %(levelname)s: %(message)s")
     fh.setFormatter(formatter)
     # 4. add the handler into logger
     logger.addHandler(fh)
@@ -123,6 +123,7 @@ def get_sequences_length(sequences, maxlen):
 
 
 def multi_sequences_padding(all_sequences, max_num_utterance=10, max_sentence_len=50):
+    # TODO: utterance tail padding
     PAD_SEQUENCE = [0] * max_sentence_len
     padded_sequences = []
     sequences_length = []
@@ -225,6 +226,78 @@ def ubuntu_emb_load(params):
     logger.info("embeddings:\t\t\t{}".format(embeddings.shape))
     return embeddings
 
+
+def split_dialogue_history(data, EOS_ID):
+    new_data = []
+    for context in data:
+        turns = [[]]
+        for _id in context:
+            if _id != EOS_ID:
+                turns[-1].append(_id)
+            else:
+                turns.append([])
+        if turns[-1] == [] and len(turns) > 1:
+            turns.pop()
+        new_data.append(turns)
+    return new_data
+
+def DAM_ubuntu_data_load(params):
+    default_params = {
+        "dataset_dir": None,
+        "phase": "training",
+        "training_files": ["data.pkl"],
+        "evaluate_files": ["evaluate_data.pkl"],
+        "eos_id": 28270,
+        "max_sentence_len": 50
+    }
+    default_params.update(params)
+    assert default_params["dataset_dir"] and os.path.exists(default_params["dataset_dir"])
+    np_dtype = np.int64
+    training_files = default_params["training_files"]
+    evaluate_files = default_params["evaluate_files"]
+    inputs = {}
+    if default_params["phase"] in ["training", "validation"]:
+        with open(os.path.join(default_params["dataset_dir"], training_files[0]), 'rb') as f:
+            training_data, validation_data, evaluate_data = pickle.load(f)
+        with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'wb') as f:
+            pickle.dump(evaluate_data, f)
+        inputs['c'] = validation_data['c'] + training_data['c']
+        inputs['r'] = validation_data['r'] + training_data['r']
+        inputs['y'] = validation_data['y'] + training_data['y']
+    else:
+        with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'rb') as f:
+            evaluate_data = pickle.load(f)
+        inputs['c'] = evaluate_data['c']
+        inputs['r'] = evaluate_data['r']
+        inputs['y'] = evaluate_data['y']
+
+    # prepare tf dataset
+    history, history_len = multi_sequences_padding(inputs['c'], max_sentence_len=default_params["max_sentence_len"])
+    true_utt_len = np.array(get_sequences_length(inputs['r'], maxlen=default_params["max_sentence_len"]),
+                            dtype=np_dtype)
+    true_utt = np.array(pad_sequences(inputs['r'], padding='post', maxlen=default_params["max_sentence_len"]),
+                        dtype=np_dtype)
+    history, history_len = np.array(history, dtype=np_dtype), np.array(history_len, dtype=np_dtype)
+    labels = np.array(inputs['r'], dtype=np_dtype)
+
+    if default_params["phase"] in ["training", "validation"]:
+        return {
+            "history": {"data": history, "type": "normal"},
+            "history_len": {"data": history_len, "type": "normal"},
+            "true_utt": {"data": true_utt, "type": "normal"},
+            "true_utt_len": {"data": true_utt_len, "type": "normal"},
+            "labels": {"data": labels, "type": "normal"}
+        }
+    else:
+        return {
+            "history": history,
+            "history_len": history_len,
+            "true_utt": true_utt,
+            "true_utt_len": true_utt_len,
+            "labels": labels
+        }
+
+
 def ubuntu_data_load(params):
     '''
     :param dataset_dir:
@@ -289,6 +362,36 @@ def ubuntu_data_load(params):
             "labels": labels
         }
 
+def DAM_ubuntu_dataloader_gen(data_dict, params):
+    default_params = {
+        "device": None,
+        "phase": "training",
+        "batch_size": 10,
+        "shuffle": {
+            "training": True,
+            "validation": False
+        }
+    }
+    default_params.update(params)
+    device = default_params["device"]
+    utt_res_labels = TensorDataset(
+        torch.tensor(data_dict["history"], device=device),
+        torch.tensor(data_dict["history_len"], device=device),
+        torch.tensor(data_dict["true_utt"], device=device),
+        torch.tensor(data_dict["true_utt_len"], device=device),
+        torch.tensor(data_dict["labels"], device=device),
+    )
+
+    shuffle = False
+    if default_params["phase"] in ["training", "validation"]:
+        shuffle = default_params["shuffle"][default_params["phase"]]
+
+    return tuple([
+        DataLoader(utt_res_labels,
+                   batch_size=default_params["batch_size"],
+                   shuffle=shuffle),
+    ])
+
 
 def ubuntu_dataloader_gen(data_dict, params):
     default_params = {
@@ -336,6 +439,18 @@ def ubuntu_dataloader_gen(data_dict, params):
                        shuffle=False),
         ])
 
+def DAM_ubuntu_data_gen(datas, params):
+    default_params = {}
+    default_params.update(params)
+    device = datas[0][0].device
+    assert len(datas) == 1
+    return {
+        "utt": datas[0][0],
+        "utt_len": datas[0][1],
+        "resp": datas[0][2],
+        "resp_len": datas[0][3],
+        "target": datas[0][4]
+    }
 
 def ubuntu_data_gen(datas, params):
     default_params = {

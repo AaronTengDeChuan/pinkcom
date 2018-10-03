@@ -11,6 +11,9 @@ import os
 import sys
 import pickle
 
+from losses.loss import CrossEntropyLoss
+from optimizers.optimizer import AdamOptimizer
+
 # base_work_dir = os.path.dirname(os.getcwd())
 # sys.path.append(base_work_dir)
 
@@ -34,7 +37,7 @@ class SMNModel(nn.Module):
         self.max_sentence_len = config["max_sentence_len"] if "max_sentence_len" in config else 50
         self.embeddings_trainable = \
             config["embeddings_trainable"] if "embeddings_trainable" in config else True
-        self.device =  config["device"]
+        self.device = config["device"]
 
         # build model
         ## Embedding
@@ -163,7 +166,6 @@ class SMNModel(nn.Module):
         # varname(last_hidden)  # torch.Size([1, None, 50])
         logits = self.smn_last_linear(last_hidden)
         # varname(logits)  # torch.Size([1, None, 2])
-
         return torch.squeeze(logits, dim=0)
 
 
@@ -173,28 +175,30 @@ class SMNModel(nn.Module):
 
 
 if __name__ == "__main__":
-    smn = SMNModel(None)
-    optimizer = torch.optim.Adam([
-        {"params": smn.parameters()}
-    ], lr=0.001)
+    smn = SMNModel({"device": torch.device("cpu")})
+    utt_inputs = torch.randint(0, 434511, (1, 10, 50), dtype=torch.int64)
+    utt_inputs = torch.cat([utt_inputs] * 2, dim=0)
+    utt_len_inputs = torch.sum(utt_inputs != 0, dim=-1)
+    resp_inputs = torch.randint(0, 434511, (2, 50), dtype=torch.int64)
+    resp_len_inputs = torch.sum(resp_inputs != 0, dim=-1)
+    targets = torch.tensor([1, 0], dtype=torch.int64)
+    inputs = {
+        "utt": utt_inputs,
+        "utt_len": utt_len_inputs,
+        "resp": resp_inputs,
+        "resp_len": resp_len_inputs,
+        "target": targets
+    }
+    loss_fn = CrossEntropyLoss({})
+    optimizer = AdamOptimizer({"lr": 0.01}).ops(smn.parameters())
+    for i in range(100):
+        smn.train()
+        optimizer.zero_grad()
+        logits = smn(inputs)
+        loss, num_labels, batch_total_loss = loss_fn(logits, inputs["target"])
+        loss.backward()
+        optimizer.step()
 
-    optimizer.zero_grad()
-
-    logits = smn(
-        {
-            "utt": utt_inputs,
-            "utt_len": utt_len_inputs,
-            "resp": resp_inputs,
-            "resp_len": resp_len_inputs,
-            "target": targets
-        }
-    )
-    # varname(logits)
-    # varname(targets)
-    criterion = F.cross_entropy
-    loss = criterion(logits, targets, reduction="elementwise_mean")
-    # varname(loss)
-    print(loss)
-
-    loss.backward()
-    optimizer.step()
+    # print(logits)
+    # print(torch.nn.functional.softmax(logits, dim=-1))
+    # print(loss.item())
