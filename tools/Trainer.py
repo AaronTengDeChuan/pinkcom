@@ -240,11 +240,11 @@ class Trainer(object):
         self.epoch_total_batches = 0
         self.epoch_total_labels = 0
 
-        early_stopping_count = 0
-        early_stopping_flag = False
+        self.early_stopping_count = 0
+        self.early_stopping_flag = False
 
         for epoch in range(1, training_params["num_epochs"] + 1):
-            if early_stopping_flag: break
+            if self.early_stopping_flag: break
             # epoch level
             epoch_start_time = time.time()
             epoch_total_samples = 0
@@ -257,9 +257,9 @@ class Trainer(object):
             log_total_loss = 0
 
             for batch_in_epoch, inputs in enumerate(self.training_data_manager):
-                if early_stopping_flag: break
+                if self.early_stopping_flag: break
                 self.model.train()
-                self.optimizer.zero_grad()
+                # self.optimizer.zero_grad()
 
                 pred = self.model(inputs)
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
@@ -304,7 +304,7 @@ class Trainer(object):
                     elif "early_stopping" in training_params and training_params["early_stopping"] > 0:
                         # early stopping
                         self.early_stopping_count += 1
-                        if early_stopping_count >= training_params["early_stopping"]:
+                        if self.early_stopping_count >= training_params["early_stopping"]:
                             self.early_stopping_flag = True
                             logger.warning("\n| Early stopping mechanism start up. "
                                            "| Recent {} times, the performance in validation set has not been improved.".format(
