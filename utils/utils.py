@@ -168,7 +168,7 @@ def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module):
     # Pads a packed batch of variable length sequences
     # Ensure that the shape of output is not changed: check this
     seq_output, _= pad_packed_sequence(packed_seq_output, batch_first=True, total_length=seq_embeds.shape[-2])
-    # varname(seq_output) # torch.Size([50, None, 200])
+    # varname(seq_output) # torch.Size([None, 50, 200])
     
     # restore original order
     _, original_indices = torch.sort(seq_indices, dim=0, descending=False)

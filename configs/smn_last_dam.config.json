@@ -6,7 +6,7 @@
                 "params": {
                     "dataset_dir": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/data/data/ubuntu",
                     "phase": "training",
-                    "training_files": ["data.pkl"],
+                    "training_files": ["training_data.pkl"],
                     "evaluate_files": ["evaluate_data.pkl"],
                     "eos_id": 28270,
                     "max_sentence_len": 50

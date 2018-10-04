@@ -259,7 +259,7 @@ class Trainer(object):
             for batch_in_epoch, inputs in enumerate(self.training_data_manager):
                 if self.early_stopping_flag: break
                 self.model.train()
-                # self.optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
                 pred = self.model(inputs)
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])

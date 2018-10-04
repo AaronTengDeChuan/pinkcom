@@ -17,8 +17,8 @@
                 "params": {
                     "phase": "training",
                     "batch_size": {
-                        "validation": 100,
-                        "evaluate": 100
+                        "validation": 200,
+                        "evaluate": 200
                     },
                     "shuffle": {
                         "training": true,
@@ -54,8 +54,8 @@
     "global":
         {
             "device": "cuda",
-            "batch_size": 100,
-            "log_file": "logs/smn/smn_last.log"
+            "batch_size": 200,
+            "log_file": "logs/smn/smn_last_b200_SGD_lr0.01.log"
         },
     "training":
         {
@@ -66,19 +66,20 @@
                 }
             },
             "optimizer": {
-                "function": "optimizers.optimizer.AdamOptimizer",
+                "function": "optimizers.optimizer.SGDOptimizer",
                 "params": {
-                    "lr": 0.001
+                    "lr": 0.01,
+                    "momentum": 0.9
                 }
             },
             "continue_train": false,
             "validation_num": 500000,
             "num_epochs": 10,
-            "early_stopping": 10,
+            "early_stopping": 0,
             "log_interval": 100,
             "validation_interval": 1000,
             "model_save_path": "models/SMN",
-            "model_prefix": "smn_last"
+            "model_prefix": "smn_last_b200_SGD_lr0.01"
         },
     "metrics":
         {
@@ -109,7 +110,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/SMN/smn_last_epoch1.pkl",
+            "test_model_file": "models/SMN/smn_last_b200_SGD_lr0.01_epoch10.pkl",
             "test_result_file": "result_smn_last"
         }
 }
