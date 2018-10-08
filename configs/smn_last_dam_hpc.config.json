@@ -17,8 +17,8 @@
                 "params": {
                     "phase": "training",
                     "batch_size": {
-                        "validation": 200,
-                        "evaluate": 200
+                        "validation": 100,
+                        "evaluate": 100
                     },
                     "shuffle": {
                         "training": true,
@@ -45,7 +45,6 @@
             "loss": {
                 "function": "losses.loss.CrossEntropyLoss",
                 "params": {
-                    "weight": "",
                     "ignore_index": -100,
                     "reduction": "elementwise_mean"
                 }
@@ -54,8 +53,8 @@
     "global":
         {
             "device": "cuda",
-            "batch_size": 200,
-            "log_file": "logs/smn/smn_last_b200_SGD_lr0.01.log"
+            "batch_size": 80,
+            "log_file": "logs/smn/smn_last_b200_Adam.log"
         },
     "training":
         {
@@ -66,20 +65,19 @@
                 }
             },
             "optimizer": {
-                "function": "optimizers.optimizer.SGDOptimizer",
+                "function": "optimizers.optimizer.AdamOptimizer",
                 "params": {
-                    "lr": 0.01,
-                    "momentum": 0.9
+                    "lr": 0.001
                 }
             },
             "continue_train": false,
             "validation_num": 500000,
             "num_epochs": 10,
             "early_stopping": 0,
-            "log_interval": 100,
-            "validation_interval": 1000,
+            "log_interval": 250,
+            "validation_interval": 2500,
             "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_b200_SGD_lr0.01"
+            "model_prefix": "smn_last_b200_Adam"
         },
     "metrics":
         {
@@ -110,7 +108,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/SMN/smn_last_b200_SGD_lr0.01_epoch10.pkl",
+            "test_model_file": "models/SMN/smn_last_b200_Adam_epoch10.pkl",
             "test_result_file": "result_smn_last"
         }
 }

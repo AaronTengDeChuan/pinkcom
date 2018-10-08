@@ -328,6 +328,7 @@ class Trainer(object):
 
     def _accumulate_metrics(self, mode, results_dict, y_pred, y_true):
         # TODO: check this
+        y_pred = torch.nn.functional.softmax(y_pred, dim=-1)
         for metric in self.metrics[mode]:
             mv, mn = metric.ops(y_pred, y_true)
             results_dict[metric.name][0] += mv
