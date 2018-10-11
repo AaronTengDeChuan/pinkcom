@@ -6,6 +6,7 @@ import json
 from copy import deepcopy
 
 import torch
+import torch.nn as nn
 
 logger = utils.get_logger()
 
@@ -265,6 +266,7 @@ class Trainer(object):
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 loss.backward()
+                nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 self.optimizer.step()
 
                 # epoch level
