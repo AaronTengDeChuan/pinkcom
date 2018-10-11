@@ -8,6 +8,7 @@ import os
 import logging
 import time
 from functools import reduce
+from copy import deepcopy
 from keras.preprocessing.sequence import pad_sequences
 import torch
 import torch.nn as nn
@@ -116,6 +117,14 @@ def lower_dict(dic, recursive=False):
             for k, v in dic.items()])
     return dic
 
+def inspect_parameters_update(optimizer, model, inputs, loss_fn):
+    params_save = deepcopy(optimizer.param_groups[0]['params'])
+    logits = model(inputs)
+    loss, num_labels, batch_total_loss = loss_fn(logits, inputs["target"])
+    loss.backward()
+    optimizer.step()
+    for sp, p in zip(params_save, optimizer.param_groups[0]['params']):
+        print(torch.equal(sp, p), torch.sum(torch.eq(sp, p)), sp.shape, p.shape)
 
 def get_sequences_length(sequences, maxlen):
     sequences_length = [min(len(sequence), maxlen) for sequence in sequences]

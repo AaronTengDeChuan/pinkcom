@@ -156,7 +156,9 @@ class SMNPlainModel(nn.Module):
             ## convolute two matrixes
             ## in_channels: [None, 2, 50, 50]
             ## out_channels: [None, 8, 16, 16]
-            conv_output = utils.stack_channels_for_conv2d((matrix1, matrix2), self.conv1)
+            # conv_output = utils.stack_channels_for_conv2d((matrix1, matrix2), self.conv1)
+            matrix = torch.stack((matrix1, matrix2), dim=1)
+            conv_output = self.conv1(matrix)
             # varname(conv_output)  # torch.Size([10, None, 8, 16, 16])
 
         # Second Layer --- Matching Accumulation

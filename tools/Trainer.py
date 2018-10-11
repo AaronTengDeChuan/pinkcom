@@ -307,7 +307,8 @@ class Trainer(object):
                         if self.early_stopping_count >= training_params["early_stopping"]:
                             self.early_stopping_flag = True
                             logger.warning("\n| Early stopping mechanism start up. "
-                                           "| Recent {} times, the performance in validation set has not been improved.".format(
+                                           "| Recent {} times, the performance in validation set has not been improved."
+                                           "".format(
                                 self.early_stopping_count))
                             logger.warning("\n| Best model is saved in '{}'".format(self._generate_model_name()))
 
@@ -321,8 +322,10 @@ class Trainer(object):
             speed = elapsed * 1000 / epoch_total_batches
             valid_loss, results = self.evaluate(validation=True)
             logger.info(
-                "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch | training loss {:8.5f} | validation loss {:8.5f}"
-                "".format(epoch, epoch_total_samples, epoch_total_batches, elapsed, speed, cur_loss, valid_loss))
+                "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
+                "| training loss {:8.5f} | validation loss {:8.5f}".format(epoch, epoch_total_samples,
+                                                                           epoch_total_batches, elapsed, speed,
+                                                                           cur_loss, valid_loss))
         logger.info(
             "\n| Training has been completed. | Best model is saved in '{}'".format(self._generate_model_name()))
 
@@ -364,8 +367,11 @@ class Trainer(object):
             results.update([(name, l[0] / l[1]) for name, l in results.items()])
 
             logger.info(
-                "\n| end of validation | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch | validation loss {:8.5f}\n{}".format(
-                    total_samples, total_batches, elapsed, speed, cur_loss, utils.generate_metrics_str(results)))
+                "\n| end of validation | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
+                "| validation loss {:8.5f} | early stopping {}/{}\n{}".format(
+                    total_samples, total_batches, elapsed, speed, cur_loss, self.early_stopping_count,
+                    self.trainerParams["training"]["early_stopping"] if "early_stopping" in self.trainerParams["training"] else 0,
+                    utils.generate_metrics_str(results)))
             return cur_loss, results
         else:
             if self.evaluate_data_manager == None: logger.error("Evaluate data manager is None.")
