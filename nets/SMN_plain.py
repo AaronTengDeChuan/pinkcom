@@ -59,6 +59,7 @@ class SMNPlainModel(nn.Module):
         ## 2d valid max_pooling
         self.conv1 = nn.Sequential(OrderedDict([
             ("conv1", nn.Conv2d(in_channels=2, out_channels=8, kernel_size=(3, 3))),
+            ("batch_norm", nn.BatchNorm2d(8)),
             ("relu1", nn.ReLU()),
             ("pool1", nn.MaxPool2d(kernel_size=(3, 3), stride=(3, 3)))
         ]))
@@ -72,9 +73,9 @@ class SMNPlainModel(nn.Module):
         ]))
 
         ## Final GRU: time major
-        self.final_gru = nn.GRU(50, 50)
+        self.final_gru = nn.GRU(50, self.rnn_units)
         ## SMN Last: Linear Transformation
-        self.smn_last_linear = nn.Linear(50, 2)
+        self.smn_last_linear = nn.Linear(self.rnn_units, 2)
 
         # TODO: check the initialization
         self.orthogonal = nn.init.orthogonal_
@@ -126,6 +127,7 @@ class SMNPlainModel(nn.Module):
 
         ## push responses into sentence gru
         resp_output, resp_ht = utils.pack_and_pad_sequences_for_rnn(response_embeds, resp_lens, self.sentence_gru)
+        # resp_output, resp_ht = self.sentence_gru(response_embeds)
         # varname(resp_output)  # torch.Size([None, 50, 200])
         # varname(resp_ht)  # torch.Size([1, None, 200])
 
@@ -142,6 +144,7 @@ class SMNPlainModel(nn.Module):
 
             ## push utterances into sentence gru
             utt_output, utt_ht = utils.pack_and_pad_sequences_for_rnn(utt_embeds, utt_lens, self.sentence_gru)
+            # utt_output, utt_ht = self.sentence_gru(utt_embeds)
             # varname(utt_output)  # torch.Size([None, 10, 50, 200])
             # varname(utt_ht)  # torch.Size([1, None, 10, 200])
 

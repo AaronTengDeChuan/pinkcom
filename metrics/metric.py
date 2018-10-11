@@ -1,5 +1,10 @@
 # coding=utf-8
 
+import os
+import sys
+base_work_dir = os.path.dirname(os.getcwd())
+sys.path.append(base_work_dir)
+
 import torch
 from utils import utils
 from utils.utils import varname
@@ -211,7 +216,7 @@ if __name__ == "__main__":
     ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
     # douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
     # score_file = "/Users/aaron_teng/Documents/SCIR/HPC/score.test"
-    with codecs.open(ubuntu_score_file, 'r', encoding="utf-8") as f:
+    with codecs.open(sys.argv[1], 'r', encoding="utf-8") as f:
         scores = [[float(line.split('\t')[0]), int(line.split('\t')[1])] for line in f.read().strip().split('\n')]
         if len(scores) % 10 != 0: scores = scores[:-(len(scores) % 10)]
         scores = list(zip(*scores))

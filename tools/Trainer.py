@@ -6,6 +6,7 @@ import json
 from copy import deepcopy
 
 import torch
+import torch.nn as nn
 
 logger = utils.get_logger()
 
@@ -265,6 +266,7 @@ class Trainer(object):
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 loss.backward()
+                nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 self.optimizer.step()
 
                 # epoch level
@@ -331,6 +333,7 @@ class Trainer(object):
 
     def _accumulate_metrics(self, mode, results_dict, y_pred, y_true):
         # TODO: check this
+        y_pred = torch.nn.functional.softmax(y_pred, dim=-1)
         for metric in self.metrics[mode]:
             mv, mn = metric.ops(y_pred, y_true)
             results_dict[metric.name][0] += mv

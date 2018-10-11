@@ -56,6 +56,7 @@ class SMNModel(nn.Module):
         self.sentence_gru = nn.GRU(self.word_embedding_size, self.rnn_units, batch_first=True)
         ## Linear Transformation
         self.a_matrix = nn.Linear(in_features=self.rnn_units, out_features=self.rnn_units, bias=False)
+        # self.a_matrix = torch.nn.Parameter(nn.Linear(in_features=self.rnn_units, out_features=self.rnn_units, bias=False).weight.transpose(0,1))
 
         ## Convolution Layer
         ## valid cross-correlation padding, 2 in_channels, 8 out_channels, kernel_size 3*3
@@ -63,6 +64,7 @@ class SMNModel(nn.Module):
         ## 2d valid max_pooling
         self.conv1 = nn.Sequential(OrderedDict([
             ("conv1", nn.Conv2d(in_channels=2, out_channels=8, kernel_size=(3, 3))),
+            ("batch_norm", nn.BatchNorm2d(8)),
             ("relu1", nn.ReLU()),
             ("pool1", nn.MaxPool2d(kernel_size=(3, 3), stride=(3, 3)))
         ]))
@@ -76,9 +78,9 @@ class SMNModel(nn.Module):
         ]))
 
         ## Final GRU: time major
-        self.final_gru = nn.GRU(50, 50)
+        self.final_gru = nn.GRU(50, self.rnn_units)
         ## SMN Last: Linear Transformation
-        self.smn_last_linear = nn.Linear(50, 2)
+        self.smn_last_linear = nn.Linear(self.rnn_units, 2)
 
         # TODO: check the initialization
         self.orthogonal = nn.init.orthogonal_
@@ -141,6 +143,7 @@ class SMNModel(nn.Module):
         ## [None, 10, 50, 200] * [200, 200] -> [None, 10, 50, 200]
         ## [10, None, 50, 200] * [None, 200, 50] -> [10, None, 50, 50]
         matrix2 = self.a_matrix(utt_output)
+        # matrix2 = torch.einsum('abij,jk->abik', (utt_output, self.a_matrix))
         # varname(matrix2)  # torch.Size([None, 10, 50, 200])
         matrix2 = torch.matmul(torch.transpose(matrix2, 0, 1), torch.transpose(resp_output, 1, 2))
         # varname(matrix2)  # torch.Size([10, None, 50, 50])
