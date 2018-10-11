@@ -14,14 +14,9 @@ class AdamOptimizer(object):
         self.weight_decay = config["weight_decay"] if "weight_decay" in config else 0
         self.amsgrad = config["amsgrad"] if "amsgrad" in config else False
         self.name = "Adam Optimizer"
-        logger.info("| {} | {}: {} | {}: {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "lr", self.lr,
-            "betas", self.betas,
-            "eps", self.eps,
-            "weight_decay", self.weight_decay,
-            "amsgrad", self.amsgrad)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "lr", self.lr, "betas", self.betas, "eps", self.eps, "weight_decay",
+                                       self.weight_decay, "amsgrad", self.amsgrad))
 
     def ops(self, params):
         return torch.optim.Adam(params, lr=self.lr, betas=self.betas, eps=self.eps, weight_decay=self.weight_decay,
@@ -35,14 +30,9 @@ class SGDOptimizer(object):
         self.dampening = config["dampening"] if "dampening" in config else 0
         self.nesterov = config["nesterov"] if "nesterov" in config else False
         self.name = "SGD Optimizer"
-        logger.info("| {} | {}: {} | {}: {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "lr", self.lr,
-            "momentum", self.momentum,
-            "weight_decay", self.weight_decay,
-            "dampening", self.dampening,
-            "nesterov", self.nesterov)
-        )
+        logger.info(utils.generate_module_info(self.name, "lr", self.lr, "momentum", self.momentum, "weight_decay",
+                                               self.weight_decay, "dampening", self.dampening, "nesterov",
+                                               self.nesterov))
 
     def ops(self, params):
         return torch.optim.SGD(params, lr=self.lr, momentum=self.momentum, weight_decay=self.weight_decay,

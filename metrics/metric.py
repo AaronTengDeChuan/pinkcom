@@ -41,13 +41,8 @@ class Recall_N_at_K(object):
         assert self.AN >= self.K
         self.skip = config["skip"] if "skip" in config else False
         self.name = "R{}@{}".format(self.AN, self.K)
-        logger.info("| {} | {}: {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "N", self.N,
-            "AN", self.AN,
-            "K", self.K,
-            "skip", self.skip)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "K", self.K, "skip", self.skip))
 
     def ops(self, y_pred, y_true):
         # TODO: check this
@@ -84,12 +79,8 @@ class MAP_in_N(object):
         assert self.AN <= self.N
         self.skip = config["skip"] if "skip" in config else False
         self.name = "MAP_in_{}".format(self.AN)
-        logger.info("| {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "N", self.N,
-            "AN", self.AN,
-            "skip", self.skip)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "skip", self.skip))
 
     def ops(self, y_pred, y_true):
         y_pred = torch.squeeze(y_pred)
@@ -126,12 +117,8 @@ class MRR_in_N(object):
         assert self.AN <= self.N
         self.skip = config["skip"] if "skip" in config else False
         self.name = "MRR_in_{}".format(self.AN)
-        logger.info("| {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "N", self.N,
-            "AN", self.AN,
-            "skip", self.skip)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "skip", self.skip))
 
     def ops(self, y_pred, y_true):
         y_pred = torch.squeeze(y_pred)
@@ -164,13 +151,8 @@ class Precision_N_at_K(object):
         assert self.AN >= self.K
         self.skip = config["skip"] if "skip" in config else False
         self.name = "Precision_{}@{}".format(self.AN, self.K)
-        logger.info("| {} | {}: {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "N", self.N,
-            "AN", self.AN,
-            "K", self.K,
-            "skip", self.skip)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "K", self.K, "skip", self.skip))
 
     def ops(self, y_pred, y_true):
         y_pred = torch.squeeze(y_pred)
@@ -197,7 +179,8 @@ class Accurary(object):
     '''
     def __init__(self, config):
         self.name = "Accuracy"
-        logger.info("| {} |".format(self.name))
+        logger.info(
+            utils.generate_module_info(self.name))
 
     def ops(self, y_pred, y_true):
         # TODO: check this

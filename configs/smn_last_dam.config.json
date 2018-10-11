@@ -2,7 +2,7 @@
     "data_manager":
         {
             "data_load": {
-                "function": "utils.utils.DAM_ubuntu_data_load",
+                "function": "utils.reader.DAM_ubuntu_data_load",
                 "params": {
                     "dataset_dir": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/data/data/ubuntu",
                     "phase": "training",
@@ -13,7 +13,7 @@
                 }
             },
             "dataloader_gen": {
-                "function": "utils.utils.DAM_ubuntu_dataloader_gen",
+                "function": "utils.reader.DAM_ubuntu_dataloader_gen",
                 "params": {
                     "phase": "training",
                     "batch_size": {
@@ -27,7 +27,7 @@
                 }
             },
             "data_gen": {
-                "function": "utils.utils.DAM_ubuntu_data_gen",
+                "function": "utils.reader.DAM_ubuntu_data_gen",
                 "params": {}
             }
         },
@@ -60,7 +60,7 @@
     "training":
         {
             "emb_load": {
-                "function": "utils.utils.ubuntu_emb_load",
+                "function": "utils.reader.ubuntu_emb_load",
                 "params": {
                     "path": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/data/data/ubuntu/word_embedding.pkl"
                 }

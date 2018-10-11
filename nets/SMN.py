@@ -5,6 +5,10 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.nn.functional as F
 import numpy as np
+
+from layers import layers
+import layers.operations as op
+
 from collections import OrderedDict
 import itertools
 import os
@@ -70,7 +74,7 @@ class SMNModel(nn.Module):
         ]))
 
         ## Dense: fully connected layer
-        in_features = utils.calculate_dim_with_initialDim_conv((self.max_sentence_len, self.max_sentence_len),
+        in_features = op.calculate_dim_with_initialDim_conv((self.max_sentence_len, self.max_sentence_len),
                                                                self.conv1)
         self.dense = nn.Sequential(OrderedDict([
             ("linear1", nn.Linear(in_features=in_features, out_features=50)),
@@ -125,7 +129,7 @@ class SMNModel(nn.Module):
         # varname(resp_lens)  # torch.Size([None])
 
         ## push responses into sentence gru
-        resp_output, resp_ht = utils.pack_and_pad_sequences_for_rnn(response_embeds, resp_lens, self.sentence_gru)
+        resp_output, resp_ht = op.pack_and_pad_sequences_for_rnn(response_embeds, resp_lens, self.sentence_gru)
         # varname(resp_output)  # torch.Size([None, 50, 200])
         # varname(resp_ht)  # torch.Size([1, None, 200])
 
@@ -135,7 +139,7 @@ class SMNModel(nn.Module):
         # varname(matrix1)  # torch.Size([10, None, 50, 50])
 
         ## push utterances into sentence gru
-        utt_output, utt_ht = utils.pack_and_pad_sequences_for_rnn(all_utt_embeds, all_utt_lens, self.sentence_gru)
+        utt_output, utt_ht = op.pack_and_pad_sequences_for_rnn(all_utt_embeds, all_utt_lens, self.sentence_gru)
         # varname(utt_output)  # torch.Size([None, 10, 50, 200])
         # varname(utt_ht)  # torch.Size([1, None, 10, 200])
 
@@ -151,7 +155,7 @@ class SMNModel(nn.Module):
         ## convolute two matrixes
         ## in_channels: [10, None, 2, 50, 50]
         ## out_channels: [10, None, 8, 16, 16]
-        conv_output = utils.stack_channels_for_conv2d((matrix1, matrix2), self.conv1)
+        conv_output = op.stack_channels_for_conv2d((matrix1, matrix2), self.conv1)
         # varname(conv_output)  # torch.Size([10, None, 8, 16, 16])
 
         # Second Layer --- Matching Accumulation
@@ -170,11 +174,6 @@ class SMNModel(nn.Module):
         logits = self.smn_last_linear(last_hidden)
         # varname(logits)  # torch.Size([1, None, 2])
         return torch.squeeze(logits, dim=0)
-
-
-
-
-    # In[62]:
 
 
 if __name__ == "__main__":

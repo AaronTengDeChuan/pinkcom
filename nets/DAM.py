@@ -1,4 +1,6 @@
 # coding: utf-8
+from utils import utils
+from utils.utils import varname
 
 import torch
 import torch.nn as nn
@@ -14,8 +16,8 @@ import os
 import sys
 import pickle
 
-from utils import utils
-from utils.utils import varname
+from losses.loss import CrossEntropyLoss
+from optimizers.optimizer import AdamOptimizer
 
 logger = utils.get_logger()
 
@@ -32,7 +34,13 @@ class DAMModel(nn.Module):
         self.max_sentence_len = config["max_sentence_len"] if "max_sentence_len" in config else 50
 
         self.is_positional = config["is_positional"] if "is_positional" in config else False
-        self.stack_num = config["stack_num"] if "stack_num" in config else 1
+        self.stack_num = config["stack_num"] if "stack_num" in config else 5
+
+        self.is_layer_norm = config["is_layer_norm"] if "is_layer_norm" in config else True
+        self.drop_prob = config["drop_prob"] if "drop_prob" in config else None
+
+        self.attention_type = config["attention_type"] if "attention_type" in config else "dot"
+        self.is_mask = config["is_mask"] if "is_mask" in config else True
 
         self.embeddings_trainable = config["emb_trainable"] if "emb_trainable" in config else True
         self.device = config["device"]
@@ -61,22 +69,22 @@ class DAMModel(nn.Module):
         for index in range(self.stack_num):
             self.self_blocks.append(layers.AttentiveModule(
                 {"name": "self_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size}))
+                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
 
         self.t_a_r_blocks = nn.ModuleList()
         for index in range(self.stack_num + 1):
             self.t_a_r_blocks.append(layers.AttentiveModule(
                 {"name": "t_a_r_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size}))
+                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
 
         self.r_a_t_blocks = nn.ModuleList()
         for index in range(self.stack_num + 1):
             self.r_a_t_blocks.append(layers.AttentiveModule(
                 {"name": "r_a_t_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size}))
+                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
 
         self.conv = nn.Sequential(
-            nn.Conv3d(in_channels=2 * self.stack_num + 1, out_channels=32, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+            nn.Conv3d(in_channels=2 * (self.stack_num + 1), out_channels=32, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                       padding=(20, 0, 0)),
             # nn.BatchNorm3d(32),
             nn.ReLU(),
@@ -104,7 +112,8 @@ class DAMModel(nn.Module):
         Hr_stack = [Hr]
 
         for index in range(self.stack_num):
-            Hr = self.self_blocks[index](Hr, Hr, Hr, Q_lengths=response_len, K_lengths=response_len)
+            Hr = self.self_blocks[index](Hr, Hr, Hr, Q_lengths=response_len, K_lengths=response_len,
+                                         attention_type=self.attention_type, is_mask=self.is_mask)
             Hr_stack.append(Hr)
 
         # context part
@@ -122,7 +131,8 @@ class DAMModel(nn.Module):
             Hu_stack = [Hu]
 
             for index in range(self.stack_num):
-                Hu = self.self_blocks[index](Hu, Hu, Hu, Q_lengths=utt_len, K_lengths=utt_len)
+                Hu = self.self_blocks[index](Hu, Hu, Hu, Q_lengths=utt_len, K_lengths=utt_len,
+                                         attention_type=self.attention_type, is_mask=self.is_mask)
                 Hu_stack.append(Hu)
 
 
@@ -131,16 +141,18 @@ class DAMModel(nn.Module):
 
             for index in range(self.stack_num + 1):
                 t_a_r = self.t_a_r_blocks[index](Hu_stack[index], Hr_stack[index], Hr_stack[index], Q_lengths=utt_len,
-                                                 K_lengths=response_len)
+                                                 K_lengths=response_len, attention_type=self.attention_type,
+                                                 is_mask=self.is_mask)
                 r_a_t = self.r_a_t_blocks[index](Hr_stack[index], Hu_stack[index], Hu_stack[index], Q_lengths=response_len,
-                                                 K_lengths=utt_len)
+                                                 K_lengths=utt_len, attention_type=self.attention_type,
+                                                 is_mask=self.is_mask)
                 t_a_r_stack.append(t_a_r)
                 r_a_t_stack.append(r_a_t)
 
             t_a_r_stack.extend(Hu_stack)
             r_a_t_stack.extend(Hr_stack)
 
-            # t_a_r shape [batch, 2*stack_num+1, max_sentence_len, emb_size]
+            # t_a_r and r_a_t: shape [batch, 2*(stack_num+1), max_sentence_len, emb_size]
             t_a_r = torch.stack(t_a_r_stack, dim=1)
             r_a_t = torch.stack(r_a_t_stack, dim=1)
 
@@ -160,7 +172,37 @@ class DAMModel(nn.Module):
 
         return logits
 
+if __name__ == "__main__":
+    dam = DAMModel({"device": torch.device("cpu")})
 
+    for k, v in dam.named_parameters():
+        logger.info("{}".format(k))
 
+    utt_inputs = torch.randint(0, 434511, (1, 10, 50), dtype=torch.int64)
+    utt_inputs = torch.cat([utt_inputs] * 2, dim=0)
+    utt_len_inputs = torch.sum(utt_inputs != 0, dim=-1)
+    resp_inputs = torch.randint(0, 434511, (2, 50), dtype=torch.int64)
+    resp_len_inputs = torch.sum(resp_inputs != 0, dim=-1)
+    targets = torch.tensor([1, 0], dtype=torch.int64)
+    inputs = {
+        "utt": utt_inputs,
+        "utt_len": utt_len_inputs,
+        "resp": resp_inputs,
+        "resp_len": resp_len_inputs,
+        "target": targets
+    }
+    loss_fn = CrossEntropyLoss({})
+    optimizer = AdamOptimizer({"lr": 0.001}).ops(dam.parameters())
 
+    for i in range(100):
+        dam.train()
+        optimizer.zero_grad()
+        logits = dam(inputs)
+        loss, num_labels, batch_total_loss = loss_fn(logits, inputs["target"])
+        loss.backward()
+        optimizer.step()
 
+        print ("epoch: {}".format(i + 1))
+        print(logits)
+        print(torch.nn.functional.softmax(logits, dim=-1))
+        print(loss.item(), end="\n\n")

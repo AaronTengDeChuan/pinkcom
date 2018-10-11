@@ -20,12 +20,9 @@ class CrossEntropyLoss(nn.Module):
         self.loss_module = torch.nn.CrossEntropyLoss(weight=self.weight, ignore_index=self.ignore_index,
                                                      reduction=self.reduction)
         self.name = "Cross Entropy Loss"
-        logger.info("| {} | {}: {} | {}: {} | {}: {}".format(
-            self.name,
-            "weight", self.weight,
-            "ignore_index", self.ignore_index,
-            "reduction", self.reduction)
-        )
+        logger.info(
+            utils.generate_module_info(self.name, "weight", self.weight, "ignore_index", self.ignore_index, "reduction",
+                                       self.reduction))
 
 
     def forward(self, input, target):

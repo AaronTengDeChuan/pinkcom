@@ -33,13 +33,17 @@
         },
     "model":
         {
-            "model_path": "nets.SMN_plain.SMNPlainModel",
+            "model_path": "nets.DAM.DAMModel",
             "params": {
                 "vocabulary_size": 434513,
                 "embedding_dim": 200,
-                "hidden_size": 200,
                 "max_num_utterance": 10,
                 "max_sentence_len": 50,
+                "is_positional": false,
+                "stack_num": 5,
+                "is_layer_norm": true,
+                "attention_type": "dot",
+                "is_mask": true,
                 "emb_trainable": true
             },
             "loss": {
@@ -54,7 +58,7 @@
         {
             "device": "cuda",
             "batch_size": 80,
-            "log_file": "logs/smn/smn_last_Adam_clip_plain.log"
+            "log_file": "logs/dam/dam_stack5.log"
         },
     "training":
         {
@@ -76,8 +80,8 @@
             "early_stopping": 10,
             "log_interval": 250,
             "validation_interval": 3750,
-            "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_Adam_clip_plain"
+            "model_save_path": "models/DAM",
+            "model_prefix": "dam_stack5"
         },
     "metrics":
         {
@@ -108,7 +112,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/SMN/smn_last_Adam_epoch4.pkl",
+            "test_model_file": "models/DAM/dam_stack5_epoch4.pkl",
             "test_result_file": "result_smn_last"
         }
 }

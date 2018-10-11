@@ -7,6 +7,7 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 logger = utils.get_logger()
 
@@ -284,8 +285,10 @@ class Trainer(object):
                     elapsed = time.time() - log_start_time
                     speed = elapsed * 1000 / training_params["log_interval"]
                     logger.info(
-                        "\n| epoch {:3d} | {:5d}/{:5d} batches | time {:5.2f}s | {:5.2f} ms/batch | loss {:8.5f} | best model in epoch {:3d}".format(
-                            epoch, batch_in_epoch + 1, self.epoch_total_batches, elapsed, speed, cur_loss, self.best_epoch))
+                        "\n| epoch {:3d} | {:5d}/{:5d} batches | time {:5.2f}s | {:5.2f} ms/batch | loss {:8.5f} "
+                        "| best model in epoch {:3d}".format(
+                            epoch, batch_in_epoch + 1, self.epoch_total_batches, elapsed, speed, cur_loss,
+                            self.best_epoch))
                     # log level
                     log_start_time = time.time()
                     log_total_labels = 0
@@ -333,7 +336,7 @@ class Trainer(object):
 
     def _accumulate_metrics(self, mode, results_dict, y_pred, y_true):
         # TODO: check this
-        y_pred = torch.nn.functional.softmax(y_pred, dim=-1)
+        y_pred = F.softmax(y_pred, dim=-1)
         for metric in self.metrics[mode]:
             mv, mn = metric.ops(y_pred, y_true)
             results_dict[metric.name][0] += mv

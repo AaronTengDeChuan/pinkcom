@@ -2,7 +2,7 @@
     "data_manager":
         {
             "data_load": {
-                "function": "utils.utils.ubuntu_data_load",
+                "function": "utils.reader.ubuntu_data_load",
                 "params": {
                     "dataset_dir": "data/smn/ubuntu",
                     "phase": "training",
@@ -12,7 +12,7 @@
                 }
             },
             "dataloader_gen": {
-                "function": "utils.utils.ubuntu_dataloader_gen",
+                "function": "utils.reader.ubuntu_dataloader_gen",
                 "params": {
                     "phase": "training",
                     "batch_size": {
@@ -26,7 +26,7 @@
                 }
             },
             "data_gen": {
-                "function": "utils.utils.ubuntu_data_gen",
+                "function": "utils.reader.ubuntu_data_gen",
                 "params": {
                     "phase": "training",
                     "negative_samples": {
@@ -65,7 +65,7 @@
     "training":
         {
             "emb_load": {
-                "function": "utils.utils.ubuntu_emb_load",
+                "function": "utils.reader.ubuntu_emb_load",
                 "params": {
                     "path": "data/smn/ubuntu/embedding.pkl"
                 }

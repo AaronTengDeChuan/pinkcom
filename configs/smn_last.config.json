@@ -2,7 +2,7 @@
     "data_manager":
         {
             "data_load": {
-                "function": "utils.utils.ubuntu_data_load",
+                "function": "utils.reader.ubuntu_data_load",
                 "params": {
                     "dataset_dir": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/SMN/Ubuntu",
                     "phase": "training",
@@ -12,7 +12,7 @@
                 }
             },
             "dataloader_gen": {
-                "function": "utils.utils.ubuntu_dataloader_gen",
+                "function": "utils.reader.ubuntu_dataloader_gen",
                 "params": {
                     "phase": "training",
                     "batch_size": 10,
@@ -23,7 +23,7 @@
                 }
             },
             "data_gen": {
-                "function": "utils.utils.ubuntu_data_gen",
+                "function": "utils.reader.ubuntu_data_gen",
                 "params": {
                     "phase": "training",
                     "negative_samples": {
@@ -62,7 +62,7 @@
     "training":
         {
             "emb_load": {
-                "function": "utils.utils.ubuntu_emb_load",
+                "function": "utils.reader.ubuntu_emb_load",
                 "params": {
                     "path": "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/SMN/Ubuntu/embedding.pkl"
                 }
