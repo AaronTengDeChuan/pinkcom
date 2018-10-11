@@ -103,6 +103,7 @@ class DAMModel(nn.Module):
 
     def forward(self, inputs):
         device = inputs["target"].device
+        dtype = torch.get_default_dtype()
         # response part
         Hr = self.embeddings(inputs["resp"]) # [batch, time, emb_size]
         response_len = inputs["resp_len"]
@@ -159,7 +160,8 @@ class DAMModel(nn.Module):
             # calculate similarity matrix
             # sim shape [batch, 2*stack_num+1, max_sentence_len, max_sentence_len]
             # divide sqrt(200) to prevent gradient explosion
-            sim = torch.einsum('bsik,bsjk->bsij', (t_a_r, r_a_t)) / torch.sqrt(torch.Tensor([200], device=device))
+            sim = torch.einsum('bsik,bsjk->bsij', (t_a_r, r_a_t)) / torch.sqrt(
+                torch.tensor([200], dtype=dtype, device=device))
             matching_vectors.append(sim)
 
         # cnn and aggregation

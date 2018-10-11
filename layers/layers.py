@@ -45,13 +45,14 @@ class PositionEncoder(nn.Module):
     def forward(self, x):
         assert x.shape[1] == self.lambda_size
         device = x.device
+        dtype = torch.get_default_dtype()
         channels = x.shape[2]
 
         position = torch.arange(0., self.lambda_size, device=device)
 
         num_timescales = channels // 2
         log_timescale_increment = math.log(float(self.max_timescale) / float(self.min_timescale)) / (
-                    torch.Tensor([num_timescales], device=device) - 1)
+                    torch.tensor([num_timescales], dtype=dtype, device=device) - 1)
         inv_timescales = self.min_timescale * torch.exp(
             torch.arange(0., num_timescales, device=device) * -log_timescale_increment)
 

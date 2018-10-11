@@ -215,10 +215,11 @@ def bilinear_sim(x, y, linear_module, is_nor=True):
     sim = torch.einsum('bik,bjk->bij', (linear_module(x), y))
 
     device = sim.device
+    dtype = torch.get_default_dtype()
 
     if is_nor:
-        scale = torch.sqrt(torch.Tensor([ x.shape[-1] * y.shape[-1] ], device=device))
-        scale = torch.max(scale, torch.Tensor([1], device=device))
+        scale = torch.sqrt(torch.tensor([ x.shape[-1] * y.shape[-1] ], dtype=dtype, device=device))
+        scale = torch.max(scale, torch.tensor([1], dtype=dtype, device=device))
         return sim / scale
     else:
         return sim
@@ -245,10 +246,11 @@ def dot_sim(x, y, is_nor=True):
     sim = torch.einsum('bik,bjk->bij', (x, y))
 
     device = sim.device
+    dtype = torch.get_default_dtype()
 
     if is_nor:
-        scale = torch.sqrt(torch.Tensor([x.shape[-1]], device=device))
-        scale = torch.max(scale, torch.Tensor([1], device=device))
+        scale = torch.sqrt(torch.tensor([x.shape[-1]], dtype=dtype, device=device))
+        scale = torch.max(scale, torch.tensor([1], dtype=dtype, device=device))
         return sim / scale
     else:
         return sim
