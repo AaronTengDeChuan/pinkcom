@@ -40,7 +40,7 @@ def create_logger(log_file, logger_name=LOGGER_NAME):
 
 def generate_metrics_str(results, verbose=False):
     '''
-    :param results: if verbose is True, dict( {name: value, ...} ) form, otherwise dict( {name: [mv, mn], ...} )
+    :param results: if verbose is False, dict( {name: value, ...} ) form, otherwise dict( {name: [mv, mn], ...} )
     :return: str
     '''
     if verbose:
@@ -60,9 +60,9 @@ def generate_metrics_str(results, verbose=False):
     return metric_str
 
 
-def generate_module_info(*args):
-    info_template = "\t| {:^15}" + " | {:^10}: {:^8}" * (len(args) // 2)
-    return info_template.format(*map(str, args))
+def generate_module_info(*args, **kargs):
+    info_template = "\t| {:^15}" + " | {:^10}: {:^8}" * (len(args) // 2 + len(kargs))
+    return info_template.format(*map(str, args), *reduce(lambda x, y: x + list(map(str, y)), kargs.items(), []))
 
 
 # TODO: Related to Debug
