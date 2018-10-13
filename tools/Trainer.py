@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from optimizers.optimizer import Optimizer
+
 logger = utils.get_logger()
 
 class Trainer(object):
@@ -83,7 +85,7 @@ class Trainer(object):
             logger.info("Defining optimizer '{}' with params:\n{}".format(optimizer_params["function"],
                                                                           json.dumps(optimizer_params["params"],
                                                                                      indent=4)))
-            self.optimizer = utils.name2function(optimizer_params["function"])(optimizer_params["params"]).ops(
+            self.lr_scheduler, self.optimizer = Optimizer(optimizer_params).ops(
                 [{"params": self.model.parameters()}])
             logger.info("Defining optimizer has been completed.")
         else:
@@ -271,6 +273,7 @@ class Trainer(object):
 
                 loss.backward()
                 nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                self.lr_scheduler.step()
                 self.optimizer.step()
 
                 del pred, loss
@@ -291,9 +294,9 @@ class Trainer(object):
                     speed = elapsed * 1000 / training_params["log_interval"]
                     logger.info(
                         "\n| epoch {:3d} | {:5d}/{:5d} batches | time {:5.2f}s | {:5.2f} ms/batch | loss {:8.5f} "
-                        "| best model in epoch {:3d}".format(
+                        "| lr {} | best model in epoch {:3d}".format(
                             epoch, batch_in_epoch + 1, self.epoch_total_batches, elapsed, speed, cur_loss,
-                            self.best_epoch))
+                            self.lr_scheduler.get_lr(), self.best_epoch))
                     # log level
                     log_start_time = time.time()
                     log_total_labels = 0
@@ -330,7 +333,9 @@ class Trainer(object):
             cur_loss = epoch_total_loss / epoch_total_labels
             elapsed = time.time() - epoch_start_time
             speed = elapsed * 1000 / epoch_total_batches
-            valid_loss, results = self.evaluate(validation=True)
+            if (batch_in_epoch + 1) % training_params["validation_interval"] / training_params[
+                "validation_interval"] >= 0.5:
+                valid_loss, results = self.evaluate(validation=True)
             logger.info(
                 "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
                 "| training loss {:8.5f} | validation loss {:8.5f}".format(epoch, epoch_total_samples,

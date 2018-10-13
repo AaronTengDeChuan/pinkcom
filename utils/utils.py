@@ -107,7 +107,7 @@ def name2function(f_name):
         pass
     else:
         if '.' in items[0]:
-            modules = __import__(items[0], fromlist=True)
+            modules = __import__(items[0], fromlist=[items[1]])
         else:
             modules = __import__(items[0])
         return getattr(modules, items[1])
