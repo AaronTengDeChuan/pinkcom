@@ -86,12 +86,12 @@ class DAMModel(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv3d(in_channels=2 * (self.stack_num + 1), out_channels=32, kernel_size=(3, 3, 3), stride=(1, 1, 1),
                       padding=(20, 0, 0)),
-            # nn.BatchNorm3d(32),
-            nn.ReLU(),
+            nn.BatchNorm3d(32),
+            nn.ReLU(inplace=True),
             nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3)),
             nn.Conv3d(in_channels=32, out_channels=16, kernel_size=(3, 3, 3), stride=(1, 1, 1)),
-            # nn.BatchNorm3d(16),
-            nn.ReLU(),
+            nn.BatchNorm3d(16),
+            nn.ReLU(inplace=True),
             nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3)),
         )
 

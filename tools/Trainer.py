@@ -121,6 +121,7 @@ class Trainer(object):
         model_params["params"]["embeddings"] = embeddings
         # put model on specified computing device
         self.model = utils.name2function(model_params["model_path"])(model_params["params"]).to(device=self.device)
+        self.model = nn.DataParallel(self.model)
         logger.info("Creating model has been completed.")
 
     def _load_metrics(self):
@@ -245,6 +246,8 @@ class Trainer(object):
         self.early_stopping_count = 0
         self.early_stopping_flag = False
 
+        # self.model = nn.DataParallel(self.model)
+
         for epoch in range(1, training_params["num_epochs"] + 1):
             if self.early_stopping_flag: break
             # epoch level
@@ -269,6 +272,8 @@ class Trainer(object):
                 loss.backward()
                 nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 self.optimizer.step()
+
+                del pred, loss
 
                 # epoch level
                 epoch_total_samples += inputs["target"].shape[0]
@@ -342,6 +347,7 @@ class Trainer(object):
             results_dict[metric.name][0] += mv
             results_dict[metric.name][1] += mn
 
+    @torch.no_grad()
     def evaluate(self, validation=False):
         self.model.eval()
         results = {}
@@ -382,6 +388,7 @@ class Trainer(object):
         else:
             if self.evaluate_data_manager == None: logger.error("Evaluate data manager is None.")
             results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
+            # self.model = nn.DataParallel(self.model)
             # evaluate
             for batch, inputs in enumerate(self.evaluate_data_manager):
                 pred = self.model(inputs)

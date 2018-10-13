@@ -187,7 +187,7 @@ class FFN(nn.Module):
         self.linear_1 = nn.Linear(in_features=self.input_dim, out_features=self.out_dim_0, bias=False)
         self.bias_1 = nn.Parameter(torch.zeros(1))
 
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
         self.linear_2 = nn.Linear(in_features=self.out_dim_0, out_features=self.out_dim_1, bias=False)
         self.bias_2 = nn.Parameter(torch.zeros(1))
@@ -199,7 +199,7 @@ class FFN(nn.Module):
 
     def forward(self, x):
         y = op.dense(x, self.linear_1, bias=self.bias_1)
-        y = self.relu(y)
+        self.relu(y)
         z = op.dense(y, self.linear_2, bias=self.bias_2)
         return z
 

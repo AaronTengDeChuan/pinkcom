@@ -17,8 +17,8 @@
                 "params": {
                     "phase": "training",
                     "batch_size": {
-                        "validation": 100,
-                        "evaluate": 100
+                        "validation": 200,
+                        "evaluate": 200
                     },
                     "shuffle": {
                         "training": false,
@@ -33,7 +33,7 @@
         },
     "model":
         {
-            "model_path": "nets.SMN_plain.SMNPlainModel",
+            "model_path": "nets.SMN.SMNModel",
             "params": {
                 "vocabulary_size": 434513,
                 "embedding_dim": 200,
@@ -54,7 +54,7 @@
         {
             "device": "cuda",
             "batch_size": 80,
-            "log_file": "logs/smn/smn_last_Adam_clip_plain.log"
+            "log_file": "logs/smn/smn_last_Adam_clip.log"
         },
     "training":
         {
@@ -75,9 +75,9 @@
             "num_epochs": 10,
             "early_stopping": 10,
             "log_interval": 250,
-            "validation_interval": 3750,
+            "validation_interval": 250,
             "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_Adam_clip_plain"
+            "model_prefix": "smn_last_Adam_clip"
         },
     "metrics":
         {
@@ -108,7 +108,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/SMN/smn_last_Adam_epoch4.pkl",
+            "test_model_file": "models/SMN/smn_last_Adam_clip_epoch4.pkl",
             "test_result_file": "result_smn_last"
         }
 }
