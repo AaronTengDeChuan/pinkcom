@@ -115,6 +115,8 @@ class Trainer(object):
                 "No computing device is specified or the name of specified device is incorrect.\nUse the default device 'cpu'")
             self.device = torch.device("cpu")
 
+        # torch.backends.cudnn.enabled = False
+
     def _creat_model(self, embeddings=None):
         model_params = deepcopy(self.trainerParams["model"])
         logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
@@ -278,7 +280,7 @@ class Trainer(object):
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 loss.backward()
-                nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                # nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 self.lr_scheduler.step()
                 self.optimizer.step()
 
@@ -310,7 +312,7 @@ class Trainer(object):
 
                 if (batch_in_epoch + 1) % training_params["validation_interval"] == 0:
                     # validation
-                    valid_loss, results = self.evaluate(validation=True)
+                    valid_loss, results = self.evaluate(validation=True if self.validation_data_manager is not None else False)
                     if min_loss == None or valid_loss < min_loss:
                         self.early_stopping_count = 0
                         self.best_epoch = epoch
@@ -341,10 +343,10 @@ class Trainer(object):
             speed = elapsed * 1000 / epoch_total_batches
             if (batch_in_epoch + 1) % training_params["validation_interval"] / training_params[
                 "validation_interval"] >= 0.5:
-                valid_loss, results = self.evaluate(validation=True)
+                valid_loss, results = self.evaluate(validation=True if self.validation_data_manager is not None else False)
             logger.info(
                 "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
-                "| training loss {:8.5f} | validation loss {:8.5f}".format(epoch, epoch_total_samples,
+                "| training loss {:8.5f} | validation loss {}".format(epoch, epoch_total_samples,
                                                                            epoch_total_batches, elapsed, speed,
                                                                            cur_loss, valid_loss))
         logger.info(
@@ -397,7 +399,9 @@ class Trainer(object):
                     utils.generate_metrics_str(results)))
             return cur_loss, results
         else:
-            if self.evaluate_data_manager == None: logger.error("Evaluate data manager is None.")
+            if self.evaluate_data_manager == None:
+                logger.error("Evaluate data manager is None.")
+                return None, None
             results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
             # self.model = nn.DataParallel(self.model)
             # evaluate
@@ -418,4 +422,4 @@ class Trainer(object):
                 "\n| end of evaluate | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch\n{}".format(
                     total_samples, total_batches, elapsed, speed, utils.generate_metrics_str(results)))
             # TODO: write prediction result
-            return results
+            return None, results

@@ -173,3 +173,13 @@ def multi_sequences_padding(all_sequences, max_num_utterance=10, max_sentence_le
     return padded_sequences, sequences_length
 
 
+# TODO: Related to RNN
+
+def repackage_hidden(h):
+    """
+        Wraps hidden states in new Tensors,in order to detach them from their history.
+    """
+    if isinstance(h, torch.Tensor):
+        return h.detach()
+    else:
+        return tuple(repackage_hidden(v) for v in h)
