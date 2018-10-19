@@ -95,6 +95,29 @@ def inspect_parameters_update(optimizer, model, inputs, loss_fn):
         print(torch.equal(sp, p), torch.sum(torch.eq(sp, p)), sp.shape, p.shape)
 
 
+def get_tf_weights(model_path_and_prefix, save_file, ignore_suffixs=("Adam", "Adam_1")):
+    import tensorflow as tf
+    import numpy as np
+    import pickle
+
+    reader = tf.train.NewCheckpointReader(model_path_and_prefix)
+    all_variables = reader.get_variable_to_shape_map()
+    variable_names = []
+    for name in all_variables.keys():
+        tmp = name.rsplit("/", maxsplit=1)
+        if len(tmp) == 1 or tmp[1] not in ignore_suffixs:
+            variable_names.append(name)
+    name2shape = dict([ (name, all_variables[name]) for name in variable_names])
+    name2value = dict([ (name, reader.get_tensor(name)) for name in variable_names])
+
+    with open(save_file, "wb") as f:
+        pickle.dump(name2value, f)
+
+    print ("Weights in {} are saved in {}:".format(model_path_and_prefix, save_file))
+    for name in sorted(variable_names):
+        print (name, ": ", name2shape[name])
+
+
 # TODO: Related to Auxiliary Functions
 
 def name2function(f_name):

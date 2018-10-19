@@ -204,19 +204,22 @@ class Trainer(object):
 
     def _generate_model_name(self):
         model_path = self.trainerParams["training"]["model_save_path"]
-        if self.best_epoch:
-            model_file = os.path.join(model_path,
-                                      self.trainerParams["training"]["model_prefix"]) + "_epoch{}.pkl".format(
-                self.best_epoch)
-            return model_file
+        model_files = {}
+        if self.best_epoch >= 1:
+            model_files["model"] = os.path.join(model_path, "model") + "_epoch{}.pkl".format(self.best_epoch)
+            model_files["optimizer"] = os.path.join(model_path, "optimizer") + "_epoch{}.pkl".format(self.best_epoch)
+            model_files["lr_scheduler"] = os.path.join(model_path, "lr_scheduler") + "_epoch{}.pkl".format(self.best_epoch)
+            return model_files
         else:
             logger.error("Best epoch is None.")
 
     def load_model(self):
         if self.training and not self.continue_train:
             # load model in training
-            model_file = self._generate_model_name()
-            self.model.load_state_dict(torch.load(model_file))
+            model_files = self._generate_model_name()
+            self.model.load_state_dict(torch.load(model_files["model"]))
+            self.lr_scheduler.load_state_dict(torch.load(model_files["lr_scheduler"]))
+            self.optimizer.load_state_dict(torch.load(model_files["optimizer"]))
         else:
             # load model in evaluate or continue_train mode
             model_file = self.trainerParams["evaluate"]["test_model_file"]
@@ -225,9 +228,12 @@ class Trainer(object):
     def save_model(self):
         model_path = self.trainerParams["training"]["model_save_path"]
         os.makedirs(model_path, exist_ok=True)
-        model_file = self._generate_model_name()
+        model_files = self._generate_model_name()
         # Save only the model parameters
-        torch.save(self.model.state_dict(), model_file)
+        torch.save(self.model.state_dict(), model_files["model"])
+        torch.save(self.lr_scheduler.state_dict(), model_files["lr_scheduler"])
+        torch.save(self.optimizer.state_dict(), model_files["optimizer"])
+
 
     def train(self):
         if not self.training: logger.error("Mode: Evaluate.")
@@ -309,7 +315,7 @@ class Trainer(object):
                         self.early_stopping_count = 0
                         self.best_epoch = epoch
                         min_loss = valid_loss
-                        logger.info("\n| epoch {:3d} | batch {:5d} | New record has been achieved. |".format(epoch,
+                        logger.info("| epoch {:3d} | batch {:5d} | New record has been achieved. |".format(epoch,
                                                                                                              batch_in_epoch + 1))
                         logger.info("Saving model...")
                         self.save_model()

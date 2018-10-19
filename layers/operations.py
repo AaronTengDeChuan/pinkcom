@@ -90,7 +90,8 @@ def calculate_dim_with_initialDim_conv(initial_dim, conv):
         :return:            input dim of first fully connected layer
     '''
     batch_size = 2
-    inputs = torch.randn((batch_size, conv[0].in_channels, *initial_dim), dtype=torch.float32)
+    dtype = torch.get_default_dtype()
+    inputs = torch.randn((batch_size, conv[0].in_channels, *initial_dim), dtype=dtype)
     outputs = conv(inputs).view(batch_size, -1)
     return outputs.shape[1]
 

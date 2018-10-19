@@ -87,8 +87,7 @@
             "early_stopping": 10,
             "log_interval": 250,
             "validation_interval": 2500,
-            "model_save_path": "models/DAM",
-            "model_prefix": "dam_stack5"
+            "model_save_path": "models/DAM/dam_stack5"
         },
     "metrics":
         {
@@ -119,7 +118,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/DAM/dam_stack5_epoch4.pkl",
+            "test_model_file": "models/DAM/dam_stack5/model_epoch4.pkl",
             "test_result_file": "result_smn_last"
         }
 }
