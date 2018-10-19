@@ -32,7 +32,7 @@ def dense(x, linear_module, bias=None):
 
 # TODO: Related to RNN
 
-def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module):
+def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module, hidden):
     '''
     similar to dynamic rnn
     supported rnn including GRU, LSTM
@@ -52,7 +52,7 @@ def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module):
     # Packs a Tensor containing padded sequences of variable length in order to obtain a PackedSequence object
     packed_seq_input = pack_padded_sequence(sorted_seq_embeds, sorted_seq_lens, batch_first=True)
     # varname(packed_seq_input) # torch.Size([478, 200]), torch.Size([50])
-    packed_seq_output, seq_ht = rnn_module(packed_seq_input)
+    packed_seq_output, seq_ht = rnn_module(packed_seq_input, hidden)
     # varname(packed_seq_output) # torch.Size([478, 200]), torch.Size([50])
     # varname(seq_ht) # torch.Size([1, None, 200])
 

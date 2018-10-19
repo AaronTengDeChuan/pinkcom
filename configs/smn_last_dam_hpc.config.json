@@ -40,7 +40,7 @@
                 "hidden_size": 200,
                 "max_num_utterance": 10,
                 "max_sentence_len": 50,
-                "emb_trainable": true
+                "emb_trainable": false
             },
             "loss": {
                 "function": "losses.loss.CrossEntropyLoss",
@@ -54,7 +54,7 @@
         {
             "device": "cuda",
             "batch_size": 80,
-            "log_file": "logs/smn/smn_last_Adam_clip.log"
+            "log_file": "logs/smn/smn_last_Adam.log"
         },
     "training":
         {
@@ -67,7 +67,14 @@
             "optimizer": {
                 "function": "optimizers.optimizer.AdamOptimizer",
                 "params": {
-                    "lr": 0.001
+                    "lr": 0.001,
+                    "lr_scheduler": {
+                        "function": "torch.optim.lr_scheduler.StepLR",
+                        "params": {
+                            "step_size": 2500,
+                            "gamma": 1
+                        }
+                    }
                 }
             },
             "continue_train": false,
@@ -75,9 +82,9 @@
             "num_epochs": 10,
             "early_stopping": 10,
             "log_interval": 250,
-            "validation_interval": 250,
+            "validation_interval": 2500,
             "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_Adam_clip"
+            "model_prefix": "smn_last_Adam"
         },
     "metrics":
         {
