@@ -5,6 +5,7 @@ import re
 import os
 import logging
 import time
+import math
 from functools import reduce
 from copy import deepcopy
 from keras.preprocessing.sequence import pad_sequences
@@ -65,6 +66,13 @@ def generate_module_info(*args, **kargs):
     return info_template.format(*map(str, args), *reduce(lambda x, y: x + list(map(str, y)), kargs.items(), []))
 
 
+def second2hour(seconds):
+    seconds = math.ceil(seconds)
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 3600 % 60
+    return "{}h {}m {}s".format(hours, minutes, seconds)
+
 # TODO: Related to Debug
 
 def varname(p):
@@ -83,6 +91,21 @@ def varname(p):
             if m:
                 var_name = str(m.group(1))
                 print("{:<40}{}".format(var_name + ':', p.shape))
+
+
+def compare_tensors(x, y, eps=1e-8):
+    def compare_tensor(tensor1, tensor2, eps=eps):
+        assert tensor1.shape == tensor2.shape, "tensor1 shape: {}, tensor2 shape: {}".format(tensor1.shape,
+                                                                                             tensor2.shape)
+        com = torch.sum(torch.le(torch.abs(tensor1 - tensor2), eps)).item()
+        print("Comparison: {} / {}".format(com, reduce(lambda a, b: a * b, tensor1.shape, 1)), end="\n\n")
+    if isinstance(x, list or tuple):
+        for tensor1, tensor2 in zip(x, y):
+            compare_tensor(tensor1, tensor2)
+    elif isinstance(x, torch.Tensor):
+        compare_tensor(x, y)
+    else:
+        return
 
 
 def inspect_parameters_update(optimizer, model, inputs, loss_fn):
@@ -145,6 +168,30 @@ def lower_dict(dic, recursive=False):
             )
             for k, v in dic.items()])
     return dic
+
+
+def calculate_metric_with_params(results, model_selection_params):
+    '''
+
+    :param results: dict( {name: value, ...} )
+    :param model_selection_params: {
+            "reduction" contains "sum", "mean" and so on,
+            "mode" contain  "max" and "min",
+            "metrics" is a list of names of metrics
+        }
+    :return: a scalar
+    '''
+    value = None
+    if model_selection_params["reduction"] in ["sum", "mean"]:
+        value = sum([results[metric_name] for metric_name in model_selection_params["metrics"]])
+    if model_selection_params["reduction"] in ["mean"]:
+        value /= len(model_selection_params["metrics"])
+
+    assert model_selection_params["mode"] in ["min", "max"], "'mode' in model_selection_params must be a member of ['min', 'max']."
+    if model_selection_params["mode"] == "max":
+        return -value
+    else:
+        return value
 
 
 # TODO: Related to Padding

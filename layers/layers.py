@@ -64,67 +64,6 @@ class PositionEncoder(nn.Module):
         return x + self._lambda * signal
 
 
-class Attention(nn.Module):
-
-    '''
-        Add attention layer.
-            Args:
-                Q: a tensor with shape [batch, Q_time, Q_dimension]
-                K: a tensor with shape [batch, time, K_dimension]
-                V: a tensor with shape [batch, time, V_dimension]
-
-                Q_length: a tensor with shape [batch]
-                K_length: a tensor with shape [batch]
-
-            Returns:
-                a tensor with shape [batch, Q_time, V_dimension]
-
-            Raises:
-                AssertionError: if
-                    Q_dimension not equal to K_dimension when attention type is dot.
-    '''
-
-    def __init__(self, config):
-        super(Attention, self).__init__()
-        assert "x_dim" in config and "y_dim" in config
-        self.x_dim = config["x_dim"]
-        self.y_dim = config["y_dim"]
-        self.drop_prob = config["drop_prob"] if "drop_prob" in config else None
-        self.bilinear_matrix = nn.Linear(in_features=self.x_dim, out_features=self.y_dim, bias=False)
-        if self.drop_prob is not None:
-            self.dropout = nn.Dropout(p=self.drop_prob)
-
-        self.name = config["name"] if "name" in config else "Attention"
-        logger.info(
-            utils.generate_module_info(self.name, "x_dim", self.x_dim, "y_dim", self.y_dim, "drop_prob",
-                                       self.drop_prob))
-
-    def forward(self, Q, K, V, Q_lengths, K_lengths, attention_type="dot", is_mask=True, mask_value=-2 ** 32 + 1):
-        assert attention_type in ('dot', 'bilinear')
-        if attention_type == 'dot':
-            assert Q.shape[-1] == K.shape[-1]
-        else:
-            assert Q.shape[-1] == self.x_dim and K.shape[-1] == self.y_dim
-
-        Q_time = Q.shape[1]
-        K_time = K.shape[1]
-
-        if attention_type == 'dot':
-            logits = op.dot_sim(Q, K)  # [batch, Q_time, K_time]
-        if attention_type == 'bilinear':
-            logits = op.bilinear_sim(Q, K, linear_module=self.bilinear_matrix)
-
-        if is_mask:
-            mask = op.mask(Q_lengths, K_lengths, Q_time, K_time)  # [batch, Q_time, K_time]
-            logits = mask * logits + (1 - mask) * mask_value
-
-        attention = F.softmax(logits, dim=-1)
-
-        if self.drop_prob is not None:
-            attention = self.dropout(attention)
-
-        return op.weighted_sum(attention, V)
-
 # NOTE: In PyTorch, torch.nn.LayerNorm(normalized_shape, eps=1e-05, elementwise_affine=True)
 #       has the same behaviour as class LayerNorm(nn.Module)
 class LayerNorm(nn.Module):
@@ -204,6 +143,68 @@ class FFN(nn.Module):
         return z
 
 
+class Attention(nn.Module):
+
+    '''
+        Add attention layer.
+            Args:
+                Q: a tensor with shape [batch, Q_time, Q_dimension]
+                K: a tensor with shape [batch, time, K_dimension]
+                V: a tensor with shape [batch, time, V_dimension]
+
+                Q_length: a tensor with shape [batch]
+                K_length: a tensor with shape [batch]
+
+            Returns:
+                a tensor with shape [batch, Q_time, V_dimension]
+
+            Raises:
+                AssertionError: if
+                    Q_dimension not equal to K_dimension when attention type is dot.
+    '''
+
+    def __init__(self, config):
+        super(Attention, self).__init__()
+        assert "x_dim" in config and "y_dim" in config
+        self.x_dim = config["x_dim"]
+        self.y_dim = config["y_dim"]
+        self.drop_prob = config["drop_prob"] if "drop_prob" in config else None
+        self.bilinear_matrix = nn.Linear(in_features=self.x_dim, out_features=self.y_dim, bias=False)
+        if self.drop_prob is not None:
+            self.dropout = nn.Dropout(p=self.drop_prob)
+
+        self.name = config["name"] if "name" in config else "Attention"
+        logger.info(
+            utils.generate_module_info(self.name, "x_dim", self.x_dim, "y_dim", self.y_dim, "drop_prob",
+                                       self.drop_prob))
+
+    def forward(self, Q, K, V, Q_lengths, K_lengths, attention_type="dot", is_mask=True, mask_value=-2 ** 32 + 1):
+        assert attention_type in ('dot', 'bilinear')
+        if attention_type == 'dot':
+            assert Q.shape[-1] == K.shape[-1]
+        else:
+            assert Q.shape[-1] == self.x_dim and K.shape[-1] == self.y_dim
+
+        Q_time = Q.shape[1]
+        K_time = K.shape[1]
+
+        if attention_type == 'dot':
+            logits = op.dot_sim(Q, K)  # [batch, Q_time, K_time]
+        if attention_type == 'bilinear':
+            logits = op.bilinear_sim(Q, K, linear_module=self.bilinear_matrix)
+
+        if is_mask:
+            mask = op.mask(Q_lengths, K_lengths, Q_time, K_time)  # [batch, Q_time, K_time]
+            logits = mask * logits + (1 - mask) * mask_value
+
+        attention = F.softmax(logits, dim=-1)
+
+        if self.drop_prob is not None:
+            attention = self.dropout(attention)
+
+        return op.weighted_sum(attention, V)
+
+
 class AttentiveModule(nn.Module):
 
     '''
@@ -233,12 +234,12 @@ class AttentiveModule(nn.Module):
         self.is_layer_norm = config["is_layer_norm"] if "is_layer_norm" in config else True
         if self.is_layer_norm:
             # Attention layer norm
-            self.attention_layer_norm = nn.LayerNorm([config["y_dim"]])
+            self.attention_layer_norm = nn.LayerNorm([config["y_dim"]], eps=1e-6)
             # self.attention_layer_norm = LayerNorm(
             #     {"name": "Attention_layer_norm", "parameter_shape": [config["x_dim"]], "axis": [-1]})
 
             # FFN layer norm
-            self.ffn_layer_norm = nn.LayerNorm([config["y_dim"]])
+            self.ffn_layer_norm = nn.LayerNorm([config["y_dim"]], eps=1e-6)
             # self.ffn_layer_norm = LayerNorm(
             #     {"name": "FFN_layer_norm", "parameter_shape": [config["x_dim"]], "axis": [-1]})
 

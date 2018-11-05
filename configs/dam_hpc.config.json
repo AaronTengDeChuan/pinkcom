@@ -17,8 +17,8 @@
                 "params": {
                     "phase": "training",
                     "batch_size": {
-                        "validation": 200,
-                        "evaluate": 200
+                        "validation": 300,
+                        "evaluate": 300
                     },
                     "shuffle": {
                         "training": false,
@@ -37,19 +37,19 @@
             "params": {
                 "vocabulary_size": 434513,
                 "embedding_dim": 200,
-                "max_num_utterance": 10,
+                "max_num_utterance": 9,
                 "max_sentence_len": 50,
                 "is_positional": false,
                 "stack_num": 5,
                 "is_layer_norm": true,
                 "attention_type": "dot",
                 "is_mask": true,
+                "final_out_features": 1,
                 "emb_trainable": true
             },
             "loss": {
-                "function": "losses.loss.CrossEntropyLoss",
+                "function": "losses.loss.BCEWithLogitsLoss",
                 "params": {
-                    "ignore_index": -100,
                     "reduction": "elementwise_mean"
                 }
             }
@@ -57,8 +57,8 @@
     "global":
         {
             "device": "cuda",
-            "batch_size": 40,
-            "log_file": "logs/dam/dam_stack5.log"
+            "batch_size": 100,
+            "log_file": "logs/dam/dam_stack_bceLoss_LS1000-0.8.log"
         },
     "training":
         {
@@ -75,19 +75,24 @@
                     "lr_scheduler": {
                         "function": "torch.optim.lr_scheduler.StepLR",
                         "params": {
-                            "step_size": 2500,
-                            "gamma": 0.9
+                            "step_size": 1000,
+                            "gamma": 0.8
                         }
                     }
                 }
             },
             "continue_train": false,
             "validation_num": 500000,
-            "num_epochs": 10,
-            "early_stopping": 10,
-            "log_interval": 250,
-            "validation_interval": 2500,
-            "model_save_path": "models/DAM/dam_stack5"
+            "num_epochs": 3,
+            "early_stopping": 20,
+            "log_interval": 100,
+            "validation_interval": 1000,
+            "model_selection": {
+                "reduction": "sum",
+                "mode": "max",
+                "metrics": ["R10@1", "R10@2"]
+            },
+            "model_save_path": "models/DAM/dam_stack_bceLoss_LS1000-0.8"
         },
     "metrics":
         {

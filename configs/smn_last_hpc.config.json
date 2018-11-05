@@ -17,7 +17,7 @@
                     "phase": "training",
                     "batch_size": {
                         "validation": 100,
-                        "evaluate": 100
+                        "evaluate": 1000
                     },
                     "shuffle": {
                         "training": false,
@@ -47,12 +47,11 @@
                 "dense_out_dim": 50,
                 "max_num_utterance": 10,
                 "max_sentence_len": 50,
-                "emb_trainable": false
+                "emb_trainable": true
             },
             "loss": {
                 "function": "losses.loss.CrossEntropyLoss",
                 "params": {
-                    "weight": "",
                     "ignore_index": -100,
                     "reduction": "elementwise_mean"
                 }
@@ -62,7 +61,7 @@
         {
             "device": "cuda",
             "batch_size": 40,
-            "log_file": "logs/smn/smn_last_noValidation_relu.log"
+            "log_file": "logs/smn/smn_last_origin.log"
         },
     "training":
         {
@@ -86,13 +85,17 @@
                 }
             },
             "continue_train": false,
-            "validation_num": 0,
+            "validation_num": 50000,
             "num_epochs": 15,
             "early_stopping": 10,
             "log_interval": 250,
             "validation_interval": 2500,
-            "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_noValidation_relu"
+            "model_selection": {
+                "reduction": "sum",
+                "mode": "max",
+                "metrics": ["R10@1", "R10@2"]
+            },
+            "model_save_path": "models/SMN/smn_last_origin"
         },
     "metrics":
         {

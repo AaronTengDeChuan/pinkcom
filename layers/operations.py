@@ -4,6 +4,36 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+import math
+import numpy as np
+
+from utils import utils
+
+logger = utils.get_logger()
+
+
+# TODO: Related to Embedding
+
+def init_embedding(vocabulary_size, word_embedding_size, embeddings=None, embeddings_trainable=True):
+    dtype = torch.get_default_dtype()
+    if isinstance(embeddings, np.ndarray):
+        # TODO: check whether share the storage
+        assert list(embeddings.shape) == [vocabulary_size, word_embedding_size]
+        embeddings = nn.Embedding.from_pretrained(torch.tensor(embeddings, dtype=dtype), freeze=not embeddings_trainable)
+        logger.info("The embeddings are initialized by pretrained embeddings" + (
+            "." if embeddings_trainable else " and frozen."))
+    elif isinstance(embeddings, torch.Tensor):
+        # TODO: check whether share the storage
+        assert dtype == embeddings.dtype \
+               and list(embeddings.shape) == [vocabulary_size, word_embedding_size]
+        embeddings = nn.Embedding.from_pretrained(embeddings, freeze=not embeddings_trainable)
+        logger.info("The embeddings are initialized by pretrained embeddings" + (
+            "." if embeddings_trainable else " and frozen."))
+    else:
+        embeddings = nn.Embedding(vocabulary_size, word_embedding_size)
+        embeddings.weight.requires_grad = embeddings_trainable
+        logger.info("The embeddings are randomly initialized" + ("." if embeddings_trainable else " and frozen."))
+    return embeddings
 
 
 # TODO: Related to Linear Layer
@@ -82,6 +112,29 @@ def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module, hidden):
 
 # TODO: Related to CNN
 
+def calculate_padding_for_cnn(input_shape, kernal_size, stride):
+    '''
+    This method is designed for "SAME" mode in convolution or pooling layer
+    Calculate 'padding' which controls the amount of implicit zero-paddings on both sides for 'padding' number of points for each dimension
+    :param input_shape:   the shape of n dimensions tensor
+    :param kernal_size: the kernal size of convolution or pooling layer
+    :param stride:      the stride of convolution or pooling layer
+    :return:            padding, output_shape
+    '''
+    assert len(input_shape) == len(kernal_size) and len(input_shape) == len(stride)
+    output_shape = []
+    padding = []
+    for i in range(len(input_shape)):
+        output_shape.append(math.ceil(float(input_shape[i]) / float(stride[i])))
+        _padding = max(kernal_size[i] - (input_shape[i] - 1)%stride[i] - 1, 0)
+        pad_head = _padding // 2
+        pad_tail = _padding - pad_head
+        # padding.append((pad_head, pad_tail))
+        # padding.append(pad_head)
+        padding.append(pad_tail)
+    return tuple(padding), tuple(output_shape)
+
+
 def calculate_dim_with_initialDim_conv(initial_dim, conv):
     '''
         Calculate input dim of first fully connected layer
@@ -148,9 +201,9 @@ def mask(row_lengths, col_lengths, max_row_length, max_col_length):
     '''
     row_mask = sequence_mask(row_lengths, max_row_length) #bool, [batch, max_row_len]
     col_mask = sequence_mask(col_lengths, max_col_length) #bool, [batch, max_col_len]
-
-    row_mask = row_mask.unsqueeze(dim=-1).to(dtype=torch.float32)
-    col_mask = col_mask.unsqueeze(dim=-1).to(dtype=torch.float32)
+    dtype = torch.get_default_dtype()
+    row_mask = row_mask.unsqueeze(dim=-1).to(dtype=dtype)
+    col_mask = col_mask.unsqueeze(dim=-1).to(dtype=dtype)
 
     # TODO: check this
     return torch.einsum('bik,bjk->bij', (row_mask, col_mask))
@@ -255,3 +308,26 @@ def dot_sim(x, y, is_nor=True):
         return sim / scale
     else:
         return sim
+
+
+if __name__ == "__main__":
+    input_shape = (9, 50, 50)
+    conv1_padding, output_shape = calculate_padding_for_cnn(input_shape, (3, 3, 3), (1, 1, 1))
+    print (conv1_padding, output_shape)
+    maxpool1_padding, output_shape = calculate_padding_for_cnn(output_shape, (3, 3, 3), (3, 3, 3))
+    print (maxpool1_padding, output_shape)
+    conv2_padding, output_shape = calculate_padding_for_cnn(output_shape, (3, 3, 3), (1, 1, 1))
+    print(conv2_padding, output_shape)
+    maxpool2_padding, output_shape = calculate_padding_for_cnn(output_shape, (3, 3, 3), (3, 3, 3))
+    print(maxpool2_padding, output_shape)
+
+    conv = nn.Sequential(
+            nn.Conv3d(in_channels=2 * (5 + 1), out_channels=32, kernel_size=(3, 3, 3), stride=(1, 1, 1),
+                      padding=conv1_padding),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3), padding=maxpool1_padding),
+            nn.Conv3d(in_channels=32, out_channels=16, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=conv2_padding),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3), padding=maxpool2_padding),
+        )
+    print (calculate_dim_with_initialDim_conv(input_shape, conv))

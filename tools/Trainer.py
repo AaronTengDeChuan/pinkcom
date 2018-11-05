@@ -8,6 +8,7 @@ from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 from optimizers.optimizer import Optimizer
 
@@ -73,7 +74,7 @@ class Trainer(object):
                 logger.info("loading embedding has been completed.")
             # create model
             model_params = self.trainerParams["model"]
-            self._creat_model(embeddings)
+            self._creat_model(embeddings=embeddings)
             # define loss function
             logger.info("Defining loss function '{}' with params:\n{}".format(model_params["loss"]["function"],
                                                                               json.dumps(model_params["loss"]["params"],
@@ -97,8 +98,20 @@ class Trainer(object):
     def _set_torch_variables(self):
         # set default dtype as torch.float64
         # torch.set_default_dtype(torch.float64)
-        # set computing device
+
         global_params = self.trainerParams["global"]
+
+        # set the random seed manually for reproducibility
+        random_seed = global_params["random_seed"] if "random_seed" in global_params else 1111
+        np.random.seed(random_seed)
+        logger.info("Set numpy random seed: {}.".format(random_seed))
+        torch.manual_seed(random_seed)
+        logger.info("Set torch random seed: {}.".format(random_seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(random_seed)
+            logger.info("Set torch cuda random seed: {}.".format(random_seed))
+
+        # set computing device
         if "device" in global_params and global_params["device"].lower() in ["cuda", "cpu"]:
             if torch.cuda.is_available():
                 if global_params["device"].lower() == "cuda":
@@ -180,8 +193,8 @@ class Trainer(object):
     def generate_data_managers(self):
         data_manager_params = deepcopy(self.trainerParams["data_manager"])
         data_manager_params["dataloader_gen"]["params"]["batch_size"]["training"] = self.trainerParams["global"]["batch_size"]
-        # put model on specified computing device
-        data_manager_params["dataloader_gen"]["params"]["device"] = self.device
+        # put data on specified computing device
+        data_manager_params["data_gen"]["params"]["device"] = self.device
         # training data manager
         if len(self.training_data_dict):
             logger.info("Generating training data manager...")
@@ -236,17 +249,37 @@ class Trainer(object):
         torch.save(self.lr_scheduler.state_dict(), model_files["lr_scheduler"])
         torch.save(self.optimizer.state_dict(), model_files["optimizer"])
 
+    def _get_validation_metric(self, results, loss):
+        '''
+        model_selection_params = {
+            "reduction" contains "sum", "mean" and so on,
+            "mode" contain  "max", "min", and "loss",
+            "metrics" is a list of names of metrics
+        }
+        '''
+        model_selection_params = self.trainerParams["training"]["model_selection"] \
+            if "model_selection" in self.trainerParams["training"] else None
+
+        if model_selection_params == None \
+                or "mode" not in model_selection_params or model_selection_params["mode"] == "loss" \
+                or "metrics" not in model_selection_params or not isinstance(model_selection_params["metrics"], list) \
+                or len(model_selection_params["metrics"]) == 0 or "reduction" not in model_selection_params:
+            return loss
+        return utils.calculate_metric_with_params(results, model_selection_params)
+
 
     def train(self):
         if not self.training: logger.error("Mode: Evaluate.")
+        training_start_time = time.time()
         training_params = self.trainerParams["training"]
-        min_loss = None
+        best_valid_metric = None
         # Whether continuing training
         if "continue_train" in training_params and training_params["continue_train"]:
             self.continue_train = True
             self.load_model()
             # evaluate existing model
-            min_loss, _ = self.evaluate(validation=True)
+            valid_loss, results, best_valid_metric = self.evaluate(
+                validation=True if self.validation_data_manager is not None else False)
             self.save_model()
             self.continue_train = False  # change continue train flag for evaluating trained model
         self.epoch_total_samples = 0
@@ -280,7 +313,7 @@ class Trainer(object):
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 loss.backward()
-                # nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                nn.utils.clip_grad_value_(self.model.parameters(), 1)
                 self.lr_scheduler.step()
                 self.optimizer.step()
 
@@ -312,16 +345,18 @@ class Trainer(object):
 
                 if (batch_in_epoch + 1) % training_params["validation_interval"] == 0:
                     # validation
-                    valid_loss, results = self.evaluate(validation=True if self.validation_data_manager is not None else False)
-                    if min_loss == None or valid_loss < min_loss:
+                    valid_loss, results, valid_metric = self.evaluate(
+                        validation=True if self.validation_data_manager is not None else False)
+                    if best_valid_metric == None or valid_metric < best_valid_metric:
                         self.early_stopping_count = 0
                         self.best_epoch = epoch
-                        min_loss = valid_loss
+                        best_valid_metric = valid_metric
                         logger.info("| epoch {:3d} | batch {:5d} | New record has been achieved. |".format(epoch,
-                                                                                                             batch_in_epoch + 1))
+                                                                                                           batch_in_epoch + 1))
                         logger.info("Saving model...")
                         self.save_model()
-                        logger.info("Best model is saved in '{}'".format(self._generate_model_name()))
+                        logger.info(
+                            "Best model is saved in \n'{}'".format(json.dumps(self._generate_model_name(), indent=4)))
                     elif "early_stopping" in training_params and training_params["early_stopping"] > 0:
                         # early stopping
                         self.early_stopping_count += 1
@@ -329,9 +364,9 @@ class Trainer(object):
                             self.early_stopping_flag = True
                             logger.warning("\n| Early stopping mechanism start up. "
                                            "| Recent {} times, the performance in validation set has not been improved."
-                                           "".format(
-                                self.early_stopping_count))
-                            logger.warning("\n| Best model is saved in '{}'".format(self._generate_model_name()))
+                                           "".format(self.early_stopping_count))
+                            logger.warning("\n| Best model is saved in \n'{}'".format(
+                                json.dumps(self._generate_model_name(), indent=4)))
 
                             # epoch level
             self.epoch_total_samples = epoch_total_samples
@@ -343,18 +378,22 @@ class Trainer(object):
             speed = elapsed * 1000 / epoch_total_batches
             if (batch_in_epoch + 1) % training_params["validation_interval"] / training_params[
                 "validation_interval"] >= 0.5:
-                valid_loss, results = self.evaluate(validation=True if self.validation_data_manager is not None else False)
+                valid_loss, results, valid_metric = self.evaluate(
+                    validation=True if self.validation_data_manager is not None else False)
             logger.info(
-                "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
-                "| training loss {:8.5f} | validation loss {}".format(epoch, epoch_total_samples,
-                                                                           epoch_total_batches, elapsed, speed,
-                                                                           cur_loss, valid_loss))
-        logger.info(
-            "\n| Training has been completed. | Best model is saved in '{}'".format(self._generate_model_name()))
+                "\n| end of epoch {:3d} | {:8d} samples, {:8d} batches | time {} | {:5.2f} ms/batch "
+                "| training loss {:8.5f} | validation loss {} | validation metric {}".format(epoch, epoch_total_samples,
+                                                                      epoch_total_batches, utils.second2hour(elapsed),
+                                                                      speed, cur_loss, valid_loss, valid_metric))
+        elapsed = time.time() - training_start_time
+        logger.info("\n| Training has been completed.| {} epochs | time {} | {}/epoch |\nBest model is saved in \n'{}'".format(
+            epoch, utils.second2hour(elapsed), utils.second2hour(elapsed / epoch),json.dumps(self._generate_model_name(), indent=4)))
+
 
     def _accumulate_metrics(self, mode, results_dict, y_pred, y_true):
         # TODO: check this
-        y_pred = F.softmax(y_pred, dim=-1)
+        if len(y_pred.shape) > 1 and y_pred.shape[-1] > 1:
+            y_pred = F.softmax(y_pred, dim=-1)
         for metric in self.metrics[mode]:
             mv, mn = metric.ops(y_pred, y_true)
             results_dict[metric.name][0] += mv
@@ -390,14 +429,14 @@ class Trainer(object):
             speed = elapsed * 1000 / total_batches
             # related to metrics
             results.update([(name, l[0] / l[1]) for name, l in results.items()])
-
+            valid_metric = self._get_validation_metric(results, cur_loss)
             logger.info(
                 "\n| end of validation | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
-                "| validation loss {:8.5f} | early stopping {}/{}\n{}".format(
-                    total_samples, total_batches, elapsed, speed, cur_loss, self.early_stopping_count,
+                "| validation loss {:8.5f} | validation metric {:.5f} | early stopping {}/{}\n{}".format(
+                    total_samples, total_batches, elapsed, speed, cur_loss, valid_metric, self.early_stopping_count,
                     self.trainerParams["training"]["early_stopping"] if "early_stopping" in self.trainerParams["training"] else 0,
                     utils.generate_metrics_str(results)))
-            return cur_loss, results
+            return cur_loss, results, valid_metric
         else:
             if self.evaluate_data_manager == None:
                 logger.error("Evaluate data manager is None.")
@@ -422,4 +461,4 @@ class Trainer(object):
                 "\n| end of evaluate | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch\n{}".format(
                     total_samples, total_batches, elapsed, speed, utils.generate_metrics_str(results)))
             # TODO: write prediction result
-            return None, results
+            return None, results, None

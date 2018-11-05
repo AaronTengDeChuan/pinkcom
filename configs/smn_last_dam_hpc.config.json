@@ -40,12 +40,12 @@
                 "hidden_size": 200,
                 "max_num_utterance": 10,
                 "max_sentence_len": 50,
-                "emb_trainable": false
+                "final_out_features": 1,
+                "emb_trainable": true
             },
             "loss": {
-                "function": "losses.loss.CrossEntropyLoss",
+                "function": "losses.loss.BCEWithLogitsLoss",
                 "params": {
-                    "ignore_index": -100,
                     "reduction": "elementwise_mean"
                 }
             }
@@ -53,8 +53,8 @@
     "global":
         {
             "device": "cuda",
-            "batch_size": 80,
-            "log_file": "logs/smn/smn_last_Adam.log"
+            "batch_size": 100,
+            "log_file": "logs/smn/smn_last_damData_LS1000-0.8.log"
         },
     "training":
         {
@@ -71,20 +71,24 @@
                     "lr_scheduler": {
                         "function": "torch.optim.lr_scheduler.StepLR",
                         "params": {
-                            "step_size": 2500,
-                            "gamma": 1
+                            "step_size": 1000,
+                            "gamma": 0.8
                         }
                     }
                 }
             },
             "continue_train": false,
             "validation_num": 500000,
-            "num_epochs": 10,
-            "early_stopping": 10,
-            "log_interval": 250,
-            "validation_interval": 2500,
-            "model_save_path": "models/SMN",
-            "model_prefix": "smn_last_Adam"
+            "num_epochs": 5,
+            "early_stopping": 15,
+            "log_interval": 100,
+            "validation_interval": 1000,
+            "model_selection": {
+                "reduction": "sum",
+                "mode": "max",
+                "metrics": ["R10@1", "R10@2"]
+            },
+            "model_save_path": "models/SMN/smn_last_damData_LS1000-0.8"
         },
     "metrics":
         {
@@ -115,7 +119,7 @@
         },
     "evaluate":
         {
-            "test_model_file": "models/SMN/smn_last_Adam_clip_epoch4.pkl",
+            "test_model_file": "models/SMN/smn_last_damData/model_epoch1.pkl",
             "test_result_file": "result_smn_last"
         }
 }

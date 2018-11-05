@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.nn.functional as F
 import numpy as np
+import math
 
 from layers import layers
 import layers.operations as op
@@ -43,36 +44,26 @@ class SMNModel(nn.Module):
         self.drop_prob = config["drop_prob"] if "drop_prob" in config else 0.0
         self.max_num_utterance = config["max_num_utterance"] if "max_num_utterance" in config else 10
         self.max_sentence_len = config["max_sentence_len"] if "max_sentence_len" in config else 50
+        self.final_out_features = config["final_out_features"] if "final_out_features" in config else 2
         self.embeddings_trainable = \
             config["emb_trainable"] if "emb_trainable" in config else True
         self.device = config["device"]
 
         # build model
         ## Embedding
-        self.embeddings = nn.Embedding(self.vocabulary_size, self.word_embedding_size)
-        if isinstance(embeddings, np.ndarray):
-            # TODO: check whether share the storage
-            self.embeddings.from_pretrained(torch.tensor(embeddings), freeze=not self.embeddings_trainable)
-        elif isinstance(embeddings, torch.Tensor):
-            # TODO: check whether share the storage
-            self.embeddings.from_pretrained(embeddings, freeze=not self.embeddings_trainable)
-        else:
-            self.embeddings.weight.requires_grad = self.embeddings_trainable
-
+        self.embeddings = op.init_embedding(self.vocabulary_size, self.word_embedding_size, embeddings=embeddings,
+                                            embeddings_trainable=self.embeddings_trainable)
         # network
         ## Sentence GRU: default batch_first is False
         self.sentence_gru = nn.GRU(self.word_embedding_size, self.rnn_units, batch_first=True)
         ## Linear Transformation
         self.a_matrix = nn.Linear(in_features=self.rnn_units, out_features=self.rnn_units, bias=False)
-        # self.a_matrix = torch.nn.Parameter(nn.Linear(in_features=self.rnn_units, out_features=self.rnn_units, bias=False).weight.transpose(0,1))
 
         ## Convolution Layer
         ## valid cross-correlation padding, 2 in_channels, 8 out_channels, kernel_size 3*3
-        ## tanh activation function
-        ## 2d valid max_pooling
+        ## relu activation function and 2d valid max_pooling
         self.conv1 = nn.Sequential(OrderedDict([
             ("conv1", nn.Conv2d(in_channels=2, out_channels=self.feature_maps, kernel_size=(3, 3))),
-            ("batch_norm", nn.BatchNorm2d(self.feature_maps)),
             ("relu1", nn.ReLU()),
             ("pool1", nn.MaxPool2d(kernel_size=(3, 3), stride=(3, 3)))
         ]))
@@ -82,29 +73,55 @@ class SMNModel(nn.Module):
                                                                self.conv1)
         self.dense = nn.Sequential(OrderedDict([
             ("linear1", nn.Linear(in_features=in_features, out_features=self.dense_out_dim)),
-            # ("batch_norm", nn.BatchNorm1d(50)),
             ("tanh1", nn.Tanh())
         ]))
 
         ## Final GRU: time major
         self.final_gru = nn.GRU(self.dense_out_dim, self.rnn_units)
         ## SMN Last: Linear Transformation
-        self.smn_last_linear = nn.Linear(self.rnn_units, 2)
+        self.smn_last_linear = nn.Linear(self.rnn_units, self.final_out_features)
 
         self.hidden1 = None
         self.hidden2 = None
         self.hidden3 = None
 
+        # self.init_parameters()
+        # self.init_parameters_from_tf()
+        # self._reset_parameters()
+
+    def _reset_parameters(self):
+        stdv = 1 / math.sqrt(self.word_embedding_size)
+
+        for parameter in self.sentence_gru.parameters():
+            if len(parameter.shape) == 2:
+                parameter.data.uniform_(-stdv, stdv)
+            else:
+                parameter.data.fill_(0)
+
+        self.a_matrix.weight.data.uniform_(-stdv, stdv)
+
+        self.conv1[0].weight.data.uniform_(-stdv, stdv)
+        self.conv1[0].bias.data.fill_(0)
+
+        self.dense[0].weight.data.uniform_(-stdv, stdv)
+        self.dense[0].bias.data.fill_(0)
+
+        for parameter in self.final_gru.parameters():
+            if len(parameter.shape) == 2:
+                parameter.data.uniform_(-stdv, stdv)
+            else:
+                parameter.data.fill_(0)
+
+        self.smn_last_linear.weight.data.uniform_(-stdv, stdv)
+        self.smn_last_linear.bias.data.fill_(0)
+
+    def init_parameters(self):
+        # TODO: test the performance with initialization or without initialization
         # TODO: check the initialization
         self.orthogonal = nn.init.orthogonal_
         self.xavier_normal = nn.init.xavier_normal_
         ## by kaiming he for relu
         self.kaiming_normal = nn.init.kaiming_normal_
-        # self.init_parameters()
-        # self.init_parameters_from_tf()
-
-    def init_parameters(self):
-        # TODO: test the performance with initialization or without initialization
         ## use orthogonal initializer to init kernel of sentence gru and final gru
         ## TODO: not exact initialization
         for parameter in self.sentence_gru.parameters():
@@ -164,79 +181,51 @@ class SMNModel(nn.Module):
 
     def forward(self, inputs):
         # First Layer --- utterances-Response Matching
-
         ## embeddings
-        all_utt_embeds = self.embeddings(inputs["utt"])
-        # varname(all_utt_embeds)  # torch.Size([None, 10, 50, 200])
-        response_embeds = self.embeddings(inputs["resp"])
-        # varname(response_embeds)  # torch.Size([None, 50, 200])
+        all_utt_embeds = self.embeddings(inputs["utt"]) # torch.Size([None, 10, 50, 200])
+        response_embeds = self.embeddings(inputs["resp"])   # torch.Size([None, 50, 200])
         ## len
-        all_utt_lens = inputs["utt_len"]
-        # varname(all_utt_lens)  # torch.Size([None, 10])
-        resp_lens = inputs["resp_len"]
-        # varname(resp_lens)  # torch.Size([None])
+        all_utt_lens = inputs["utt_len"]    # torch.Size([None, 10])
+        resp_lens = inputs["resp_len"]  # torch.Size([None])
 
         ## push responses into sentence gru
         self.hidden1 = self.init_hidden(response_embeds.shape[:-2], self.hidden1)
-        resp_output, resp_ht = op.pack_and_pad_sequences_for_rnn(response_embeds, resp_lens, self.sentence_gru, self.hidden1)
-        # resp_output, resp_ht = self.sentence_gru(response_embeds)
-        # varname(resp_output)  # torch.Size([None, 50, 200])
-        # varname(resp_ht)  # torch.Size([1, None, 200])
+        self.sentence_gru.flatten_parameters()
+        resp_output, resp_ht = op.pack_and_pad_sequences_for_rnn(response_embeds, resp_lens, self.sentence_gru, self.hidden1)   # torch.Size([None, 50, 200] and torch.Size([1, None, 200])
 
         ## calculate matrix1
         ## [10, None, 50, 200] * [None, 200, 50] -> [10, None, 50, 50]
         matrix1 = torch.matmul(torch.transpose(all_utt_embeds, 0, 1), torch.transpose(response_embeds, 1, 2))
-        # varname(matrix1)  # torch.Size([10, None, 50, 50])
 
         ## push utterances into sentence gru
         self.hidden2 = self.init_hidden(all_utt_embeds.shape[:-2], self.hidden2)
-        utt_output, _ = op.pack_and_pad_sequences_for_rnn(all_utt_embeds, all_utt_lens, self.sentence_gru, self.hidden2)
-        #utt_output, _ = self.sentence_gru(all_utt_embeds.view(tuple([-1]) +  all_utt_embeds.shape[-2:]))
-        # utt_output = utt_output.view(all_utt_embeds.shape[:-2] + utt_output.shape[-2:])
-        # varname(utt_output)  # torch.Size([None, 10, 50, 200])
-        # varname(utt_ht)  # torch.Size([1, None, 10, 200])
+        self.sentence_gru.flatten_parameters()
+        utt_output, _ = op.pack_and_pad_sequences_for_rnn(all_utt_embeds, all_utt_lens, self.sentence_gru, self.hidden2)    # torch.Size([None, 10, 50, 200]) and torch.Size([1, None, 10, 200])
 
         ## TODO: calculate matrix2: check this
         ## [None, 10, 50, 200] * [200, 200] -> [None, 10, 50, 200]
         ## [10, None, 50, 200] * [None, 200, 50] -> [10, None, 50, 50]
-        matrix2 = self.a_matrix(utt_output)
-        # matrix2 = torch.einsum('abij,jk->abik', (utt_output, self.a_matrix))
-        # varname(matrix2)  # torch.Size([None, 10, 50, 200])
-        matrix2 = torch.matmul(torch.transpose(matrix2, 0, 1), torch.transpose(resp_output, 1, 2))
-        # varname(matrix2)  # torch.Size([10, None, 50, 50])
+        matrix2 = self.a_matrix(utt_output) # torch.Size([None, 10, 50, 200])
+        matrix2 = torch.matmul(torch.transpose(matrix2, 0, 1), torch.transpose(resp_output, 1, 2))  # torch.Size([10, None, 50, 50])
 
         ## convolute two matrixes
-        ## in_channels: [10, None, 2, 50, 50]
-        ## out_channels: [10, None, 8, 16, 16]
+        ## in_channels: [10, None, 2, 50, 50], out_channels: [10, None, 8, 16, 16]
         conv_output = op.stack_channels_for_conv2d((matrix1, matrix2), self.conv1)
-        # conv_outputs = []
-        # for mat1, mat2 in zip(matrix1, matrix2):
-        #     conv_outputs.append(op.stack_channels_for_conv2d((mat1, mat2), self.conv1))
-        # conv_output = torch.stack(conv_outputs, dim=0)
-        conv_output = conv_output.transpose(2,4).transpose(2,3).contiguous()
-        # varname(conv_output)  # torch.Size([10, None, 8, 16, 16])
+
+        conv_output = conv_output.transpose(2,4).transpose(2,3).contiguous()    # torch.Size([10, None, 8, 16, 16])
 
         # Second Layer --- Matching Accumulation
-
         ## flat conv_output
-        flatten_input = conv_output.view(conv_output.shape[:-3] + tuple([-1]))
-        # varname(flatten_input)  # torch.Size([10, None, 2048])
+        flatten_input = conv_output.view(conv_output.shape[:-3] + tuple([-1]))  # torch.Size([10, None, 2048])
         ## dense layer
-        dense_output = self.dense(flatten_input)
-        # dense_outputs = []
-        # for fi in flatten_input:
-        #     dense_outputs.append(self.dense(fi))
-        # dense_output = torch.stack(dense_outputs, dim=0)
-        # varname(dense_output)  # torch.Size([10, None, 50])
+        dense_output = self.dense(flatten_input)    # torch.Size([10, None, 50])
         ## push dense_output into final gru
         ## TODO: Why not mask the empty utterances ?
         self.hidden3 = self.init_hidden(dense_output.shape[-2], self.hidden3)
-        final_output, last_hidden = self.final_gru(dense_output, self.hidden3)
-        # varname(final_output)  # torch.Size([10, None, 50])
-        # varname(last_hidden)  # torch.Size([1, None, 50])
-        logits = self.smn_last_linear(last_hidden)
-        # varname(logits)  # torch.Size([1, None, 2])
-        return torch.squeeze(logits, dim=0)
+        self.final_gru.flatten_parameters()
+        final_output, last_hidden = self.final_gru(dense_output, self.hidden3)  # torch.Size([10, None, 50]) and torch.Size([1, None, 50])
+        logits = self.smn_last_linear(last_hidden)  # torch.Size([1, None, 2])
+        return logits.squeeze()
 
 
 if __name__ == "__main__":

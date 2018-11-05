@@ -16,8 +16,8 @@ logger = utils.get_logger()
 class Recall_N_at_K(object):
     '''
     Input:
-        Designed for 2 classes
-        y_pred: [x*N, 2]
+        Designed for 2 or 1 classes
+        y_pred: [x*N, 2 or 1]
         y_true: [x*N]
     Aim:
         Calculate the recall of the true positive replies among the k selected ones as the main evaluation metric,
@@ -51,7 +51,7 @@ class Recall_N_at_K(object):
         # varname(y_pred)
         # varname(y_true)
         assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:,1].tolist()
+        y_pred = y_pred[:,1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
         y_true = y_true.tolist()
 
         x = len(y_pred) // self.N
@@ -86,7 +86,7 @@ class MAP_in_N(object):
         y_pred = torch.squeeze(y_pred)
         y_true = torch.squeeze(y_true)
         assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist()
+        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
         y_true = y_true.tolist()
 
         x = len(y_pred) // self.N
@@ -124,7 +124,7 @@ class MRR_in_N(object):
         y_pred = torch.squeeze(y_pred)
         y_true = torch.squeeze(y_true)
         assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist()
+        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
         y_true = y_true.tolist()
 
         x = len(y_pred) // self.N
@@ -158,7 +158,7 @@ class Precision_N_at_K(object):
         y_pred = torch.squeeze(y_pred)
         y_true = torch.squeeze(y_true)
         assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist()
+        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
         y_true = y_true.tolist()
 
         x = len(y_pred) // self.N
@@ -186,6 +186,8 @@ class Accurary(object):
         # TODO: check this
         y_pred = torch.squeeze(y_pred)
         y_true = torch.squeeze(y_true)
+        if len(y_pred.shape) < 2:
+            return 1, 1
         assert y_pred.shape[:-1] == y_true.shape
         correct = torch.sum(torch.eq(torch.argmax(y_pred, dim=-1), y_true)).item()
         total = 1

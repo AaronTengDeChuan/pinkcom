@@ -46,7 +46,7 @@ def ubuntu_emb_load(params):
 
     with open(default_params["path"], "rb") as f:
         embeddings = pickle.load(f, encoding="bytes")
-    logger.info("embeddings:\t\t\t{}".format(embeddings.shape))
+    logger.info("embeddings:\t{}\t{}".format(embeddings.shape, embeddings.dtype))
     return embeddings
 
 
@@ -132,13 +132,12 @@ def DAM_ubuntu_dataloader_gen(data_dict, params):
         default_params["batch_size"]["validation"] = default_params["batch_size"]["training"]
     if "evaluate" not in default_params["batch_size"]:
         default_params["batch_size"]["evaluate"] = default_params["batch_size"]["training"]
-    device = default_params["device"]
     utt_res_labels = TensorDataset(
-        torch.tensor(data_dict["history"], device=device),
-        torch.tensor(data_dict["history_len"], device=device),
-        torch.tensor(data_dict["true_utt"], device=device),
-        torch.tensor(data_dict["true_utt_len"], device=device),
-        torch.tensor(data_dict["labels"], device=device),
+        torch.tensor(data_dict["history"]),
+        torch.tensor(data_dict["history_len"]),
+        torch.tensor(data_dict["true_utt"]),
+        torch.tensor(data_dict["true_utt_len"]),
+        torch.tensor(data_dict["labels"])
     )
 
     shuffle = False
@@ -153,16 +152,18 @@ def DAM_ubuntu_dataloader_gen(data_dict, params):
 
 
 def DAM_ubuntu_data_gen(datas, params):
-    default_params = {}
+    default_params = {
+        "device": None
+    }
     default_params.update(params)
-    device = datas[0][0].device
+    device = default_params["device"]
     assert len(datas) == 1
     return {
-        "utt": datas[0][0],
-        "utt_len": datas[0][1],
-        "resp": datas[0][2],
-        "resp_len": datas[0][3],
-        "target": datas[0][4]
+        "utt": datas[0][0].to(device=device),
+        "utt_len": datas[0][1].to(device=device),
+        "resp": datas[0][2].to(device=device),
+        "resp_len": datas[0][3].to(device=device),
+        "target": datas[0][4].to(device=device)
     }
 
 
