@@ -4,6 +4,7 @@ import time
 import os
 import json
 from copy import deepcopy
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -45,7 +46,9 @@ class Trainer(object):
     def __init__(self, trainerParams, training=True):
         # TODO: computation in cuda
         self.trainerParams = trainerParams
+        self.saved_config = deepcopy(trainerParams)
         self.training = training
+        self.fine_tune = False
         self.continue_train = False
 
         self.training_data_dict = {}
@@ -62,9 +65,10 @@ class Trainer(object):
         # Set the random seed manually for reproducibility.
         # torch.manual_seed(args.seed)
 
-        self.best_epoch = -1
-
         if self.training:
+            self.best_epoch = -1
+            self.start_epoch = self.trainerParams["training"]["start_epoch"] \
+                if "start_epoch" in self.trainerParams["training"] else 1
             # load embedding
             embeddings = None
             if "emb_load" in self.trainerParams["training"]:
@@ -82,12 +86,16 @@ class Trainer(object):
             self.loss_fn = utils.name2function(model_params["loss"]["function"])(model_params["loss"]["params"])
             logger.info("Defining loss function has been completed.")
             # define optimizer
-            optimizer_params = self.trainerParams["training"]["optimizer"]
+            optimizer_params = deepcopy(self.trainerParams["training"]["optimizer"])
             logger.info("Defining optimizer '{}' with params:\n{}".format(optimizer_params["function"],
                                                                           json.dumps(optimizer_params["params"],
                                                                                      indent=4)))
-            self.lr_scheduler, self.optimizer = Optimizer(optimizer_params).ops(
-                [{"params": self.model.parameters()}])
+            optimizer_grouped_parameters = [{"params": self.model.parameters()}]
+            if "optimizer_grouped_parameters_gen" in optimizer_params:
+                gen_params = optimizer_params["optimizer_grouped_parameters_gen"]
+                optimizer_grouped_parameters = utils.name2function(gen_params["function"])(
+                    self.model.module, gen_params["params"], model_params["params"])
+            self.lr_scheduler, self.optimizer = Optimizer(optimizer_params).ops(optimizer_grouped_parameters)
             logger.info("Defining optimizer has been completed.")
         else:
             # create model
@@ -147,13 +155,17 @@ class Trainer(object):
         for mode, metrics in metrics_params.items():
             self.metrics[mode] = [utils.name2function(metric["function"])(metric["params"]) for metric in metrics]
 
-    def _split_data_into_training_validation(self, data_dict, validation_num):
+    def _split_data_into_training_validation(self, data_dict, validation_num, training_num=None):
         # TODO: check this
         for key in data_dict.keys():
             if data_dict[key]["type"].lower() == "normal":
                 assert validation_num <= data_dict[key]["data"].shape[0]
                 if validation_num > 0: self.validation_data_dict[key] = data_dict[key]["data"][:validation_num]
-                self.training_data_dict[key] = data_dict[key]["data"][validation_num:]
+                if training_num is None:
+                    self.training_data_dict[key] = data_dict[key]["data"][validation_num:]
+                else:
+                    assert training_num <= data_dict[key]["data"].shape[0] - validation_num
+                    self.training_data_dict[key] = data_dict[key]["data"][-training_num:]
             elif data_dict[key]["type"].lower() == "share":
                 if validation_num > 0: self.validation_data_dict[key] = data_dict[key]["data"]
                 self.training_data_dict[key] = data_dict[key]["data"]
@@ -162,14 +174,16 @@ class Trainer(object):
 
     def load_data(self, training_data=True):
         if "data_load" in self.trainerParams["data_manager"]:
-            data_load_params = self.trainerParams["data_manager"]["data_load"]
+            data_load_params = deepcopy(self.trainerParams["data_manager"]["data_load"])
             data_load_fn = utils.name2function(data_load_params["function"])
             if self.training and training_data:
                 logger.info("Loading training and validation data...")
                 data_load_params["params"]["phase"] = "training"  # data_load.params.phase is changed
+                training_num = self.trainerParams["training"]["training_num"] \
+                    if "training_num" in self.trainerParams["training"] else None
                 validation_num = self.trainerParams["training"]["validation_num"]
                 data_dict = data_load_fn(data_load_params["params"])
-                self._split_data_into_training_validation(data_dict, validation_num)
+                self._split_data_into_training_validation(data_dict, validation_num, training_num)
                 logger.info("Loading training and validation data has been completed.")
             else:
                 logger.info("Loading evaluate data...")
@@ -219,25 +233,36 @@ class Trainer(object):
 
     def _generate_model_name(self):
         model_path = self.trainerParams["training"]["model_save_path"]
+        only_save_best = self.trainerParams["training"]["only_save_best"] \
+            if "only_save_best" in self.trainerParams["training"] else True
         model_files = {}
         if self.best_epoch >= 1:
-            model_files["model"] = os.path.join(model_path, "model") + "_epoch{}.pkl".format(self.best_epoch)
-            model_files["optimizer"] = os.path.join(model_path, "optimizer") + "_epoch{}.pkl".format(self.best_epoch)
-            model_files["lr_scheduler"] = os.path.join(model_path, "lr_scheduler") + "_epoch{}.pkl".format(self.best_epoch)
+            suffix = ".pkl" if only_save_best else "_epoch{}.pkl".format(self.best_epoch)
+            model_files["model"] = os.path.join(model_path, "model") + suffix
+            model_files["optimizer"] = os.path.join(model_path, "optimizer") + suffix
+            model_files["lr_scheduler"] = os.path.join(model_path, "lr_scheduler") + suffix
+            model_files["config"] = os.path.join(model_path, "config.json")
             return model_files
         else:
             logger.error("Best epoch is None.")
 
     def load_model(self):
-        if self.training and not self.continue_train:
-            # load model in training
-            model_files = self._generate_model_name()
-            self.model.load_state_dict(torch.load(model_files["model"]))
-            self.lr_scheduler.load_state_dict(torch.load(model_files["lr_scheduler"]))
-            self.optimizer.load_state_dict(torch.load(model_files["optimizer"]))
+        if self.training:
+            if self.fine_tune:
+                # load fine-tuned model: load only model's parameters
+                logger.info("Loading model from {} ...".format(self.fine_tune_model_path))
+                self.model.load_state_dict(torch.load(self.fine_tune_model_path))
+            else:
+                # load model in training
+                logger.info("Loading model from {} ...".format(self.trainerParams["training"]["model_save_path"]))
+                model_files = self._generate_model_name()
+                self.model.load_state_dict(torch.load(model_files["model"]))
+                self.lr_scheduler.load_state_dict(torch.load(model_files["lr_scheduler"]))
+                self.optimizer.load_state_dict(torch.load(model_files["optimizer"]))
         else:
-            # load model in evaluate or continue_train mode
+            # load model in evaluate
             model_file = self.trainerParams["evaluate"]["test_model_file"]
+            logger.info("Loading model from {} ...".format(model_file))
             self.model.load_state_dict(torch.load(model_file))
 
     def save_model(self):
@@ -248,6 +273,10 @@ class Trainer(object):
         torch.save(self.model.state_dict(), model_files["model"])
         torch.save(self.lr_scheduler.state_dict(), model_files["lr_scheduler"])
         torch.save(self.optimizer.state_dict(), model_files["optimizer"])
+        # Save model config
+        logger.info("Whether TrainerParams is changed during training: {}".format(self.saved_config != self.trainerParams))
+        json.dump(self.saved_config, open(model_files["config"], 'w'), indent=4)
+
 
     def _get_validation_metric(self, results, loss):
         '''
@@ -271,27 +300,44 @@ class Trainer(object):
     def train(self):
         if not self.training: logger.error("Mode: Evaluate.")
         training_start_time = time.time()
-        training_params = self.trainerParams["training"]
+        training_params = deepcopy(self.trainerParams["training"])
+        training_params["num_epochs"] = int(training_params["num_epochs"])
+        training_params["log_interval"] = int(training_params["log_interval"])
+        training_params["validation_interval"] = int(training_params["validation_interval"])
         best_valid_metric = None
+        self.early_stopping_count = 0
+        self.early_stopping_flag = False
         # Whether continuing training
         if "continue_train" in training_params and training_params["continue_train"]:
             self.continue_train = True
+            self.best_epoch = self.start_epoch
+            self.load_model()
+            # evaluate existing model
+            valid_loss, results, best_valid_metric = self.evaluate(
+                validation=True if self.validation_data_manager is not None else False)
+            self.continue_train = False  # change continue train flag for evaluating trained model
+
+        if "fine_tune" in training_params and training_params["fine_tune"] is not None:
+            self.fine_tune = True
+            self.fine_tune_model_path = training_params["fine_tune"]
             self.load_model()
             # evaluate existing model
             valid_loss, results, best_valid_metric = self.evaluate(
                 validation=True if self.validation_data_manager is not None else False)
             self.save_model()
-            self.continue_train = False  # change continue train flag for evaluating trained model
-        self.epoch_total_samples = 0
-        self.epoch_total_batches = 0
-        self.epoch_total_labels = 0
+            self.fine_tune = False  # change fine-tune flag for evaluating trained model
 
-        self.early_stopping_count = 0
-        self.early_stopping_flag = False
+        data_parallel = isinstance(self.model, nn.DataParallel)
+        if not hasattr(self.model.module if data_parallel else self.model, "num_updates"):
+            setattr(self.model.module if data_parallel else self.model, "num_updates", 0)
+
+        self.epoch_total_samples = self.training_data_manager.num_samples
+        self.epoch_total_batches = int(self.epoch_total_samples / self.training_data_manager.batch_size)
+        self.epoch_total_labels = 0
 
         # self.model = nn.DataParallel(self.model)
 
-        for epoch in range(1, training_params["num_epochs"] + 1):
+        for epoch in range(self.start_epoch, training_params["num_epochs"] + 1):
             if self.early_stopping_flag: break
             # epoch level
             epoch_start_time = time.time()
@@ -312,10 +358,16 @@ class Trainer(object):
                 pred = self.model(inputs)
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
-                loss.backward()
-                nn.utils.clip_grad_value_(self.model.parameters(), 1)
+                if isinstance(loss, torch.Tensor): loss.backward()
+                # utils.output_model_params_and_grad(self.model)
+                if "grad_clipping" in training_params and training_params["grad_clipping"] > 0:
+                    # nn.utils.clip_grad_norm_(self.model.parameters(), training_params["grad_clipping"])
+                    nn.utils.clip_grad_value_(self.model.parameters(), training_params["grad_clipping"])
                 self.lr_scheduler.step()
                 self.optimizer.step()
+
+                if data_parallel: self.model.module.num_updates += 1
+                else: self.model.num_updates += 1
 
                 del pred, loss
 
@@ -399,16 +451,38 @@ class Trainer(object):
             results_dict[metric.name][0] += mv
             results_dict[metric.name][1] += mn
 
+
+    def _accumulate_predictions(self, predictions, y_pred, inputs):
+        if len(y_pred.shape) > 1 and y_pred.shape[-1] > 1:
+            y_scores = F.softmax(y_pred, dim=-1)
+            y_pred = torch.argmax(y_scores, dim=-1)
+        else:
+            y_scores = y_pred
+        predictions[0] += y_scores.tolist()
+        predictions[1] += y_pred.tolist()
+        for key, value in inputs.items(): predictions[2][key] += value.tolist()
+
+
+    def output_predictions(self, predictions, config):
+        utils.name2function(config["function"])(predictions, config["params"])
+
+
     @torch.no_grad()
     def evaluate(self, validation=False):
+
+        # utils.output_model_params_and_grad(self.model.module)
+
         self.model.eval()
-        results = {}
+        # metric result
+        verbose_results = {}
+        # predictions
+        predictions = [[], [], defaultdict(list)]  # [scores, prediction, inputs]
         start_time = time.time()
         total_samples = 0
         total_batches = 0
         if self.training and validation:
             if self.validation_data_manager == None: logger.error("Validation data manager is None.")
-            results.update([(metric.name, [0., 0]) for metric in self.metrics["validation"]])
+            verbose_results.update([(metric.name, [0., 0]) for metric in self.metrics["validation"]])
             total_loss = 0.
             total_labels = 0
             # validation
@@ -416,7 +490,7 @@ class Trainer(object):
                 pred = self.model(inputs)
                 _, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
                 # accumulate metrics
-                self._accumulate_metrics("validation", results, pred, inputs["target"])
+                self._accumulate_metrics("validation", verbose_results, pred, inputs["target"])
 
                 total_samples += inputs["target"].shape[0]
                 total_loss += batch_total_loss
@@ -428,26 +502,27 @@ class Trainer(object):
             elapsed = time.time() - start_time
             speed = elapsed * 1000 / total_batches
             # related to metrics
-            results.update([(name, l[0] / l[1]) for name, l in results.items()])
+            results = dict([(name, l[0] / l[1]) for name, l in verbose_results.items()])
             valid_metric = self._get_validation_metric(results, cur_loss)
             logger.info(
                 "\n| end of validation | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch "
                 "| validation loss {:8.5f} | validation metric {:.5f} | early stopping {}/{}\n{}".format(
                     total_samples, total_batches, elapsed, speed, cur_loss, valid_metric, self.early_stopping_count,
                     self.trainerParams["training"]["early_stopping"] if "early_stopping" in self.trainerParams["training"] else 0,
-                    utils.generate_metrics_str(results)))
+                    utils.generate_metrics_str(verbose_results, verbose=True)))
             return cur_loss, results, valid_metric
         else:
             if self.evaluate_data_manager == None:
                 logger.error("Evaluate data manager is None.")
                 return None, None
-            results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
+            verbose_results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
             # self.model = nn.DataParallel(self.model)
-            # evaluate
+            # evaluate and output predictions
             for batch, inputs in enumerate(self.evaluate_data_manager):
                 pred = self.model(inputs)
                 # calculate metrics
-                self._accumulate_metrics("evaluate", results, pred, inputs["target"])
+                self._accumulate_metrics("evaluate", verbose_results, pred, inputs["target"])
+                self._accumulate_predictions(predictions, pred, inputs)
 
                 total_samples += inputs["target"].shape[0]
                 total_batches += 1
@@ -455,10 +530,13 @@ class Trainer(object):
             elapsed = time.time() - start_time
             speed = elapsed * 1000 / total_batches
             # related to metrics
-            results.update([(name, l[0] / l[1]) for name, l in results.items()])
+            results = dict([(name, l[0] / l[1]) for name, l in verbose_results.items()])
+            # output predictions
+            if "output_result" in self.trainerParams["evaluate"]:
+                self.output_predictions(predictions, self.trainerParams["evaluate"]["output_result"])
 
             logger.info(
-                "\n| end of evaluate | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch\n{}".format(
-                    total_samples, total_batches, elapsed, speed, utils.generate_metrics_str(results)))
+                "\n| end of evaluation | {:8d} samples, {:8d} batches | time {:5.2f}s | {:5.2f} ms/batch\n{}".format(
+                    total_samples, total_batches, elapsed, speed, utils.generate_metrics_str(verbose_results, verbose=True)))
             # TODO: write prediction result
             return None, results, None

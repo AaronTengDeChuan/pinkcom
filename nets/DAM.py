@@ -21,6 +21,30 @@ from optimizers.optimizer import AdamOptimizer
 
 logger = utils.get_logger()
 
+
+def tensor_hook(grad):
+    print('grad:', grad)
+    input("\nnext hook:")
+
+def tensor_info(tensor):
+    print (tensor)
+    tensor.register_hook(tensor_hook)
+    input("\nnext tensor:")
+
+
+def output_result(predictions, params):
+    scores = None
+    labels = predictions[2]["target"]
+    if isinstance(predictions[0][0], list):
+        scores = [s[1] for s in predictions[0]]
+    else:
+        scores = predictions[0]
+
+    with open(params["file_name"], 'w', encoding="utf-8") as f:
+        for score, label in zip(scores, labels):
+            f.write("{}\t{}\n".format(score, label))
+
+
 class DAMModel(nn.Module):
     """DAM Module contains ."""
 
@@ -35,6 +59,8 @@ class DAMModel(nn.Module):
 
         self.is_positional = config["is_positional"] if "is_positional" in config else False
         self.stack_num = config["stack_num"] if "stack_num" in config else 5
+
+        self.head_num = config["head_num"] if "head_num" in config else 0
 
         self.is_layer_norm = config["is_layer_norm"] if "is_layer_norm" in config else True
         self.drop_prob = config["drop_prob"] if "drop_prob" in config else None
@@ -56,21 +82,42 @@ class DAMModel(nn.Module):
 
         self.self_blocks = nn.ModuleList()
         for index in range(self.stack_num):
-            self.self_blocks.append(layers.AttentiveModule(
-                {"name": "self_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
+            if self.head_num <= 0:
+                self.self_blocks.append(layers.AttentiveModule(
+                    {"name": "self_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
+            else:
+                self.self_blocks.append(layers.MultiHeadedAttentiveModule(
+                    {"name": "self_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "head_num": self.head_num, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
 
         self.t_a_r_blocks = nn.ModuleList()
         for index in range(self.stack_num + 1):
-            self.t_a_r_blocks.append(layers.AttentiveModule(
-                {"name": "t_a_r_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
+            if self.head_num <= 0:
+                self.t_a_r_blocks.append(layers.AttentiveModule(
+                    {"name": "t_a_r_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
+            else:
+                self.t_a_r_blocks.append(layers.MultiHeadedAttentiveModule(
+                    {"name": "t_a_r_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "head_num": self.head_num, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
 
         self.r_a_t_blocks = nn.ModuleList()
         for index in range(self.stack_num + 1):
-            self.r_a_t_blocks.append(layers.AttentiveModule(
-                {"name": "r_a_t_block_{}".format(index), "x_dim": self.word_embedding_size,
-                 "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm, "drop_prob": self.drop_prob}))
+            if self.head_num <= 0:
+                self.r_a_t_blocks.append(layers.AttentiveModule(
+                    {"name": "r_a_t_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
+            else:
+                self.r_a_t_blocks.append(layers.MultiHeadedAttentiveModule(
+                    {"name": "r_a_t_block_{}".format(index), "x_dim": self.word_embedding_size,
+                     "y_dim": self.word_embedding_size, "head_num": self.head_num, "is_layer_norm": self.is_layer_norm,
+                     "drop_prob": self.drop_prob}))
 
         self.creat_conv()
 
@@ -176,7 +223,9 @@ class DAMModel(nn.Module):
 
         logits = self.final(final_info.view(final_info.shape[0], -1)) # logits shape [batch, 1]
 
-        return logits.squeeze()
+        # utils.varname(logits, fn=tensor_info)
+
+        return logits.squeeze(-1)
 
 if __name__ == "__main__":
     dam = DAMModel({"device": torch.device("cpu")})

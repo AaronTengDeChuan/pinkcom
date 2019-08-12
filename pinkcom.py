@@ -4,6 +4,7 @@ from tools.Trainer import Trainer
 from utils import utils
 import os
 import json
+import _jsonnet
 import argparse
 
 VERSION = "0.1.0"
@@ -18,8 +19,14 @@ def train(config, evaluate=False):
         trainer.train()
     except KeyboardInterrupt:
         logger.warning('Exiting from training early.')
-    if evaluate:
+    if trainer.validation_data_manager is not None or evaluate:
         trainer.load_model()
+    if trainer.validation_data_manager is not None:
+        try:
+            trainer.evaluate(validation=True)
+        except KeyboardInterrupt:
+            logger.warning('Exiting from validation early.')
+    if evaluate:
         trainer.evaluate()
 
 def evaluate(config):
@@ -40,8 +47,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config_file = args.config
+    config_file_type = config_file.split('.')[-1]
+    # load config file
+    config = None
+    if config_file_type == "jsonnet":
+        config = json.loads(_jsonnet.evaluate_file(config_file))
+    else:
+        config = json.load(open(config_file, 'r'))
     # lower the configuration parameters dict
-    trainerParams = utils.lower_dict(json.load(open(config_file, 'r')), recursive=True)
+    trainerParams = utils.lower_dict(config, recursive=True)
 
     logger = utils.create_logger(trainerParams["global"]["log_file"])
 

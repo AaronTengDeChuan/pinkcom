@@ -11,20 +11,29 @@ from utils.utils import varname
 class DatasetManager(object):
     def __init__(self, data_dict=None, dataManagerParams={}):
         self.dataManagerParams = deepcopy(dataManagerParams)
+        self.dataNames = None
+        self.num_samples = None
+        self.batch_size = None
 
         if data_dict is not None:
             self.data_dict = data_dict
-            if "dataloader_gen" in dataManagerParams:
+            self.dataNames = [k for k in self.data_dict.keys()]
+            if "dataloader_gen" in self.dataManagerParams:
+                self.num_samples = len(self.data_dict[list(self.data_dict.keys())[0]])
+                self.batch_size = self.dataManagerParams["dataloader_gen"]["params"]["batch_size"][
+                    self.dataManagerParams["dataloader_gen"]["params"]["phase"]]
                 self.dataloader_gen_fn = \
-                    utils.name2function(dataManagerParams["dataloader_gen"]["function"])
+                    utils.name2function(self.dataManagerParams["dataloader_gen"]["function"])
+                self.dataManagerParams["dataloader_gen"]["params"]["data_names"] = self.dataNames
                 self.dataloaders = self.dataloader_gen_fn(
                         self.data_dict,
-                        dataManagerParams["dataloader_gen"]["params"]
+                        self.dataManagerParams["dataloader_gen"]["params"]
                     )
 
-        if "data_gen" in dataManagerParams:
+        if "data_gen" in self.dataManagerParams:
+            self.dataManagerParams["data_gen"]["params"]["data_names"] = self.dataNames
             self.data_gen_fn = \
-                utils.name2function(dataManagerParams["data_gen"]["function"])
+                utils.name2function(self.dataManagerParams["data_gen"]["function"])
         
         self.dataiters = None
         self.iter_call_flag = False

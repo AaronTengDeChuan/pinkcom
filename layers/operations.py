@@ -62,15 +62,17 @@ def dense(x, linear_module, bias=None):
 
 # TODO: Related to RNN
 
-def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module, hidden):
+def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module, hidden=None):
     '''
     similar to dynamic rnn
     supported rnn including GRU, LSTM
     batch_first of rnn_module must be True
-    :param seq_embeds:
-    :param seq_lens:
+    :param seq_embeds:  [batch, ..., seq_len, input_size]
+    :param seq_lens:    [batch, ...]
     :param rnn_module: rnn module in Pytorch
-    :return: rnn_output, rnn_ht
+    :return:
+        rnn_output: [batch, ..., seq_len, num_directions * hidden_size],
+        rnn_ht:     [num_layers * num_directions, batch, ..., hidden_size]
     '''
     sorted_seq_lens, seq_indices = torch.sort(seq_lens.view(-1), dim=0, descending=True)
     sorted_seq_embeds = torch.index_select(seq_embeds.view(-1, seq_embeds.shape[-2], seq_embeds.shape[-1]), dim=0,
@@ -102,10 +104,16 @@ def pack_and_pad_sequences_for_rnn(seq_embeds, seq_lens, rnn_module, hidden):
 
     assert seq_output.shape[-2] == seq_embeds.shape[-2]
 
+    # seq_ht: [num_layers * num_directions, batch, hidden_size]
     if isinstance(seq_ht, torch.Tensor):
+        seq_ht = torch.index_select(seq_ht.transpose(0, 1), dim=0, index=original_indices).transpose(0, 1)
         seq_ht = seq_ht.view(seq_ht.shape[:-2] + seq_embeds.shape[:-2] + seq_ht.shape[-1:])
     else:
-        seq_ht = tuple([ht.view(ht.shape[:-2] + seq_embeds.shape[:-2] + ht.shape[-1:]) for ht in seq_ht])
+        tmp = []
+        for ht in seq_ht:
+            ht = torch.index_select(ht.transpose(0, 1), dim=0, index=original_indices).transpose(0, 1)
+            tmp.append(ht.view(ht.shape[:-2] + seq_embeds.shape[:-2] + ht.shape[-1:]))
+        seq_ht = tuple(tmp)
     # varname(seq_ht)
     return seq_output, seq_ht
 
@@ -135,7 +143,7 @@ def calculate_padding_for_cnn(input_shape, kernal_size, stride):
     return tuple(padding), tuple(output_shape)
 
 
-def calculate_dim_with_initialDim_conv(initial_dim, conv):
+def calculate_dim_with_initialDim_conv(initial_dim, conv, in_channels=None):
     '''
         Calculate input dim of first fully connected layer
         :param initial_dim: a list of integers respresenting the shape of last n-2 dimensions of a tensor
@@ -144,7 +152,7 @@ def calculate_dim_with_initialDim_conv(initial_dim, conv):
     '''
     batch_size = 2
     dtype = torch.get_default_dtype()
-    inputs = torch.randn((batch_size, conv[0].in_channels, *initial_dim), dtype=dtype)
+    inputs = torch.randn((batch_size, in_channels if in_channels else conv[0].in_channels, *initial_dim), dtype=dtype)
     outputs = conv(inputs).view(batch_size, -1)
     return outputs.shape[1]
 
@@ -156,7 +164,7 @@ def stack_channels_for_conv2d(channels, conv2d_module):
     :return: conv output
     """
     stack_dim = -3
-    if isinstance(channels, tuple):
+    if isinstance(channels, (tuple, list)):
         channels = torch.stack(channels, dim=stack_dim)
     # varname(channels)
     conv_input = channels.view(tuple([-1]) + channels.shape[-3:])
@@ -173,18 +181,25 @@ def stack_channels_for_conv2d(channels, conv2d_module):
 
 # TODO: Related to Mask
 
-def sequence_mask(lengths, max_length):
+def sequence_mask(lengths, max_length, mask_value=0):
     '''
     Returns a mask tensor representing the first N positions of each cell
-    :param lengths:     a tensor with shape [batch]
+    :param lengths:     a tensor with shape [d1,...]
     :param max_length:  an integer
-    :return:            a tensor with shape [batch, max_length] and dtype torch.uint8
+    :mask_value:        0 or 1
+    :return:            a tensor with shape [d1,..., max_length] and dtype torch.uint8
     '''
     device = lengths.device
-    left = torch.ones(lengths.shape[0], max_length, dtype=torch.int64, device=device) * torch.arange(1, max_length + 1,
-                                                                                                     device=device)
-    right = lengths.unsqueeze(dim=-1).expand(-1, max_length)
-    return left <= right
+    # left = torch.ones(lengths.shape[0], max_length, dtype=torch.int64, device=device) * torch.arange(1, max_length + 1,
+    #                                                                                                  device=device)
+    # right = lengths.unsqueeze(dim=-1).expand(-1, max_length)
+
+    # n-dimension version
+    left = torch.ones(*lengths.shape, max_length, dtype=torch.int64, device=device) * torch.arange(1, max_length + 1,
+                                                                                                   device=device)
+    right = lengths.unsqueeze(dim=-1).expand(*lengths.shape, max_length)
+
+    return left <= right if mask_value == 0 else left > right
 
 
 def mask(row_lengths, col_lengths, max_row_length, max_col_length):
@@ -211,12 +226,20 @@ def mask(row_lengths, col_lengths, max_row_length, max_col_length):
 
 # TODO: Related to Math Operations
 
+def weighted_avg(x, weights):
+    """ x = batch * len * d
+        weights = batch * len
+        Equivalent: weighted_sum(weights.unsqueeze(1), x).squeeze(1)
+    """
+    return weights.unsqueeze(1).bmm(x).squeeze(1)
+
+
 def weighted_sum(weight, values):
     '''
         Calcualte the weighted sum.
             Args:
-                weight: a tensor with shape [batch, time, dimension]
-                values: a tensor with shape [batch, dimension, values_dimension]
+                weight: a tensor with shape [batch, *, time, dimension]
+                values: a tensor with shape [batch, *, dimension, values_dimension]
 
             Return:
                 a tensor with shape [batch, time, values_dimension]
@@ -226,7 +249,8 @@ def weighted_sum(weight, values):
     assert weight.shape[-1] == values.shape[-2]
 
     # TODO: check this
-    return torch.einsum('bij,bjk->bik', (weight, values))
+    # return torch.einsum('bij,bjk->bik', (weight, values))
+    return torch.matmul(weight, values)
 
 
 def reduce_mean(x, axis=None, keepdim=False):
@@ -252,11 +276,11 @@ def bilinear_sim(x, y, linear_module, is_nor=True):
     '''
         Calculate bilinear similarity with two tensor.
             Args:
-                x: a tensor with shape [batch, time_x, dimension_x]
-                y: a tensor with shape [batch, time_y, dimension_y]
+                x: a tensor with shape [batch, *, time_x, dimension_x]
+                y: a tensor with shape [batch, *, time_y, dimension_y]
 
             Returns:
-                a tensor with shape [batch, time_x, time_y]
+                a tensor with shape [batch, *, time_x, time_y]
 
             Raises:
                 ValueError: if
@@ -266,7 +290,8 @@ def bilinear_sim(x, y, linear_module, is_nor=True):
     assert x.shape[-1] == linear_module.in_features and linear_module.out_features == y.shape[-1]
 
     # TODO: check this
-    sim = torch.einsum('bik,bjk->bij', (linear_module(x), y))
+    # sim = torch.einsum('bik,bjk->bij', (linear_module(x), y))
+    sim = torch.matmul(linear_module(x), y.transpose(-2, -1))
 
     device = sim.device
     dtype = torch.get_default_dtype()
@@ -284,8 +309,8 @@ def dot_sim(x, y, is_nor=True):
         Calculate dot similarity with two tensor.
 
             Args:
-                x: a tensor with shape [batch, time_x, dimension]
-                y: a tensor with shape [batch, time_y, dimension]
+                x: a tensor with shape [batch, *, time_x, dimension]
+                y: a tensor with shape [batch, *, time_y, dimension]
 
             Returns:
                 a tensor with shape [batch, time_x, time_y]
@@ -297,7 +322,8 @@ def dot_sim(x, y, is_nor=True):
     assert x.shape[-1] == y.shape[-1]
 
     # TODO: check this
-    sim = torch.einsum('bik,bjk->bij', (x, y))
+    # sim = torch.einsum('bik,bjk->bij', (x, y))
+    sim = torch.matmul(x, y.transpose(-2, -1))
 
     device = sim.device
     dtype = torch.get_default_dtype()
@@ -308,6 +334,40 @@ def dot_sim(x, y, is_nor=True):
         return sim / scale
     else:
         return sim
+
+
+def word_level_attention(linear_module, context, context_len, utterances, utterances_len, relu=True, is_mask=True,
+                         mask_value=-2 ** 32 + 1):
+    '''
+
+    :param linear_module: a transformation matrix of shape [embedding_dim, output_dim]
+    :param context: a tensor of shape [batch, context_len, embedding_dim]
+    :param context_len: a tensor of shape [batch]
+    :param utterances: a tensor of shape [batch, num_turns, utterance_len, embedding_dim]
+    :param utterances_len: a tensor of shape [batch, num_turns]
+    :return: a tensor of shape [batch, num_turns, context_len, embedding_dim]
+    '''
+    assert linear_module.in_features == context.size(0)
+    con = linear_module(context)
+    utt = linear_module(utterances)
+    if relu:
+        con = F.relu(con, inplace=True)
+        utt = F.relu(utt, inplace=True)
+    logits = torch.einsum('aik,abjk->abij', (con, utt)) # [batch, num_turns, context_len, utterance_len]
+
+    if is_mask:
+        context_mask = sequence_mask(context_len, context.size(-2)) # [batch, context_len]
+        utterances_mask = sequence_mask(utterances_len.view(-1), utterances.size(-2)).view(*utterances_len.shape) # [batch, num_turns, utterance_len]
+        dtype = torch.get_default_dtype()
+        context_mask = context_mask.unsqueeze(dim=-1).to(dtype=dtype)
+        utterances_mask = utterances_mask.unsqueeze(dim=-1).to(dtype=dtype)
+
+        mask = torch.einsum('aik,abjk->abij', (context_mask, utterances_mask)) # [batch, num_turns, context_len, utterance_len]
+        logits = mask * logits + (1 - mask) * mask_value
+
+    attention = F.softmax(logits, dim=-1)
+
+    return weighted_sum(attention, utterances) # [batch, num_turns, context_len, embedding_dim]
 
 
 if __name__ == "__main__":

@@ -16,8 +16,8 @@
                 "params": {
                     "phase": "training",
                     "batch_size": {
-                        "validation": 100,
-                        "evaluate": 200
+                        "validation": 20,
+                        "evaluate": 300
                     },
                     "shuffle": {
                         "training": true,
@@ -38,15 +38,18 @@
         },
     "model":
         {
-            "model_path": "nets.SMN.SMNModel",
+            "model_path": "nets.DAM.DAMModel",
             "params": {
                 "vocabulary_size": 434511,
                 "embedding_dim": 200,
-                "hidden_size": 200,
-                "feature_maps": 8,
-                "dense_out_dim": 50,
-                "max_num_utterance": 10,
+                "max_num_utterance": 9,
                 "max_sentence_len": 50,
+                "is_positional": false,
+                "head_num": 0,
+                "stack_num": 5,
+                "is_layer_norm": true,
+                "attention_type": "dot",
+                "is_mask": true,
                 "final_out_features": 1,
                 "emb_trainable": true
             },
@@ -62,7 +65,7 @@
         {
             "device": "cuda",
             "batch_size": 50,
-            "log_file": "logs/smn/smn_last.log"
+            "log_file": "logs/dam/dam_smn_LS1000-0.8.log"
         },
     "training":
         {
@@ -79,8 +82,8 @@
                     "lr_scheduler": {
                         "function": "torch.optim.lr_scheduler.StepLR",
                         "params": {
-                            "step_size": 500,
-                            "gamma": 1
+                            "step_size": 1000,
+                            "gamma": 0.8
                         }
                     }
                 }
@@ -96,7 +99,7 @@
                 "mode": "max",
                 "metrics": ["R10@1", "R10@2"]
             },
-            "model_save_path": "models/SMN/smn_last"
+            "model_save_path": "models/DAM/dam_smn_LS1000-0.8"
         },
     "metrics":
         {

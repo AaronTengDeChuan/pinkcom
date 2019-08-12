@@ -224,8 +224,8 @@ class SMNModel(nn.Module):
         self.hidden3 = self.init_hidden(dense_output.shape[-2], self.hidden3)
         self.final_gru.flatten_parameters()
         final_output, last_hidden = self.final_gru(dense_output, self.hidden3)  # torch.Size([10, None, 50]) and torch.Size([1, None, 50])
-        logits = self.smn_last_linear(last_hidden)  # torch.Size([1, None, 2])
-        return logits.squeeze()
+        logits = self.smn_last_linear(last_hidden).squeeze(0)  # torch.Size([None, 2])
+        return logits.squeeze(-1)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@
                 "params": {
                     "dataset_dir": "data/smn/ubuntu",
                     "phase": "training",
-                    "training_files": ["responses.pkl", "utterances.pkl"],
+                    "training_files": ["responses.pkl", "fake_utterances.pkl"],
                     "evaluate_files": ["Evaluate.pkl"],
                     "max_sentence_len": 50
                 }
@@ -62,7 +62,7 @@
         {
             "device": "cuda",
             "batch_size": 50,
-            "log_file": "logs/smn/smn_last.log"
+            "log_file": "logs/smn/smn_last_fake.log"
         },
     "training":
         {
@@ -89,14 +89,14 @@
             "validation_num": 50000,
             "num_epochs": 5,
             "early_stopping": 15,
-            "log_interval": 100,
-            "validation_interval": 1000,
+            "log_interval": 200,
+            "validation_interval": 2000,
             "model_selection": {
                 "reduction": "sum",
                 "mode": "max",
                 "metrics": ["R10@1", "R10@2"]
             },
-            "model_save_path": "models/SMN/smn_last"
+            "model_save_path": "models/SMN/smn_last_fake"
         },
     "metrics":
         {

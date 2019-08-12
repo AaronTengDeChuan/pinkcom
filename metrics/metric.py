@@ -2,10 +2,13 @@
 
 import os
 import sys
-base_work_dir = os.path.dirname(os.getcwd())
-sys.path.append(base_work_dir)
+
+if __name__ == "__main__":
+    base_work_dir = os.path.dirname(os.getcwd())
+    sys.path.append(base_work_dir)
 
 import torch
+from functools import reduce
 from utils import utils
 from utils.utils import varname
 import logging
@@ -57,9 +60,15 @@ class Recall_N_at_K(object):
         x = len(y_pred) // self.N
         total_recall = 0.
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
+            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
+            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
+
+            y_p = pt_temp[0][:self.AN][::-1]
+            y_t = pt_temp[1][:self.AN][::-1]
             total = sum(y_t)
+            if total == 0: x -= 1; continue
+
             c = list(zip(y_p, y_t))
             c = sorted(c, key=lambda x: x[0], reverse=True)
             recall = 0. + [pt[1] for pt in c][:self.K].count(1)
@@ -92,8 +101,15 @@ class MAP_in_N(object):
         x = len(y_pred) // self.N
         APs = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
+            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
+            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
+
+            y_p = pt_temp[0][:self.AN][::-1]
+            y_t = pt_temp[1][:self.AN][::-1]
+            total = sum(y_t)
+            if total == 0: x -= 1; continue
+
             c = list(zip(y_p, y_t))
             c = sorted(c, key=lambda x: x[0], reverse=True)
             num_refs = 0
@@ -130,8 +146,15 @@ class MRR_in_N(object):
         x = len(y_pred) // self.N
         RRs = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
+            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
+            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
+
+            y_p = pt_temp[0][:self.AN][::-1]
+            y_t = pt_temp[1][:self.AN][::-1]
+            total = sum(y_t)
+            if total == 0: x -= 1; continue
+
             c = list(zip(y_p, y_t))
             c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
             assert 1 in c
@@ -164,8 +187,15 @@ class Precision_N_at_K(object):
         x = len(y_pred) // self.N
         Ps = 0
         for i in range(x):
-            y_p = (y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
-            y_t = (y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N])[:self.AN][::-1]
+            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
+            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
+            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
+
+            y_p = pt_temp[0][:self.AN][::-1]
+            y_t = pt_temp[1][:self.AN][::-1]
+            total = sum(y_t)
+            if total == 0: x -= 1; continue
+
             c = list(zip(y_p, y_t))
             c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
             Ps += 1.0 if 1 in c[:self.K] else 0
@@ -196,23 +226,28 @@ class Accurary(object):
         return correct, total
 
 
-if __name__ == "__main__":
-    # test actual output
-    ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
-    # douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
-    # score_file = "/Users/aaron_teng/Documents/SCIR/HPC/score.test"
+def calculate_metrics_with_score_file(score_file, score_format="PT"):
     with codecs.open(sys.argv[1], 'r', encoding="utf-8") as f:
-        scores = [[float(line.split('\t')[0]), int(line.split('\t')[1])] for line in f.read().strip().split('\n')]
+        scores = [[float(x) for x in line.split('\t')] for line in f.read().strip().split('\n')]
         if len(scores) % 10 != 0: scores = scores[:-(len(scores) % 10)]
-        scores = list(zip(*scores))
-    y_pred = torch.stack([torch.tensor(scores[0])] * 2, dim=-1)
-    y_true = torch.tensor(scores[1])
-    print (y_pred.shape, y_pred.dtype)
-    print (y_true.shape, y_true.dtype)
-    # print (y_pred)
-    # print (y_true)
 
-    r2_at_1 = Recall_N_at_K({"N": 10, "AN": 2, "K": 1, "skip": False}) # for ubuntu
+    assert score_format in ['PT', 'PP', 'PPT'], "Incorrect score format {}, and true format include '{}'.".format(
+        score_format, ['PT', 'PP', 'PPT'])
+
+    if score_format == "PT":
+        scores = list(zip(*scores))
+        y_pred = torch.stack([torch.tensor(scores[0])] * 2, dim=-1)
+        y_true = torch.tensor(scores[1])
+    elif score_format == "PP":
+        y_pred = torch.tensor(scores)
+        y_true = torch.tensor(reduce(lambda x, y: x + [1] + [0] * 9, range(len(scores) // 10), []))
+    elif score_format == "PPT":
+        scores = list(zip(*scores))
+        y_pred = torch.stack([torch.tensor(scores[0]), torch.tensor(scores[1])], dim=-1)
+        y_true = torch.tensor(scores[2])
+    print(y_pred.shape, y_pred.dtype)
+    print(y_true.shape, y_true.dtype)
+    r2_at_1 = Recall_N_at_K({"N": 10, "AN": 2, "K": 1, "skip": False})  # for ubuntu
     r10_at_1 = Recall_N_at_K({"N": 10, "K": 1, "skip": False})
     r10_at_2 = Recall_N_at_K({"N": 10, "K": 2, "skip": False})
     r10_at_5 = Recall_N_at_K({"N": 10, "K": 5, "skip": False})
@@ -222,14 +257,22 @@ if __name__ == "__main__":
     acc = Accurary({})
 
     metrics_dict = {
-        r2_at_1.name:   r2_at_1.ops(y_pred, y_true), # for ubuntu
-        r10_at_1.name:  r10_at_1.ops(y_pred, y_true),
-        r10_at_2.name:  r10_at_2.ops(y_pred, y_true),
-        r10_at_5.name:  r10_at_5.ops(y_pred, y_true),
-        map.name:       map.ops(y_pred, y_true),
-        mrr.name:       mrr.ops(y_pred, y_true),
-        p_at_1.name:    p_at_1.ops(y_pred, y_true),
-        acc.name:       acc.ops(y_pred, y_true)
+        r2_at_1.name: r2_at_1.ops(y_pred, y_true),  # for ubuntu
+        r10_at_1.name: r10_at_1.ops(y_pred, y_true),
+        r10_at_2.name: r10_at_2.ops(y_pred, y_true),
+        r10_at_5.name: r10_at_5.ops(y_pred, y_true),
+        map.name: map.ops(y_pred, y_true),
+        mrr.name: mrr.ops(y_pred, y_true),
+        p_at_1.name: p_at_1.ops(y_pred, y_true),
+        acc.name: acc.ops(y_pred, y_true)
     }
 
-    print (utils.generate_metrics_str(metrics_dict, verbose=True))
+    print(utils.generate_metrics_str(metrics_dict, verbose=True))
+
+
+if __name__ == "__main__":
+    # test actual output
+    ubuntu_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/ubuntu/DAM/score.test"
+    # douban_score_file = "/Users/aaron_teng/Documents/SCIR/papers/Dialogue/DAM/models/output/douban/DAM/score"
+    # score_file = "/Users/aaron_teng/Documents/SCIR/HPC/score.test"
+    calculate_metrics_with_score_file(sys.argv[1], sys.argv[2])

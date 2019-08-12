@@ -8,6 +8,59 @@ from utils import utils
 
 logger = utils.get_logger()
 
+
+def gather_statistics(loss, target, reduction):
+    # count the number of targets
+    num_labels = reduce(lambda x, y: x * y, target.shape, 1)
+
+    # calculate total_loss
+    if reduction != "none":
+        total_loss = loss.item() * (num_labels if reduction == "elementwise_mean" else 1)
+    else:
+        total_loss = torch.sum(loss).item()
+
+    return num_labels, total_loss
+
+
+class MarginRankingLoss(nn.Module):
+    '''
+    This loss combines a Sigmoid layer and the MarginRankingLoss which measures the loss given inputs x1, x2,
+        two 1D mini-batch Tensors, and a label 1D mini-batch tensor (containing 1 or -1).
+    Computes sigmoid cross entropy given logits.
+    '''
+    def __init__(self, config):
+        super(MarginRankingLoss, self).__init__()
+        self.margin = config["margin"] if "margin" in config else 0.0
+        self.reduction = config["reduction"] if "reduction" in config else "elementwise_mean"
+
+        self.sigmoid = torch.nn.Sigmoid()
+        self.loss_module = torch.nn.MarginRankingLoss(margin=self.margin, reduction=self.reduction)
+        self.name = config["name"] if "name" in config else "Margin Ranking Loss"
+        logger.info(utils.generate_module_info(self.name, "margin", self.margin, "reduction", self.reduction))
+
+
+    def forward(self, input, target):
+        """
+        :param input: (N, 1)
+        :param target: (N)
+        :return: scalar . If reduction is "none", then the same size as the target: (N).
+        """
+        assert input.shape == target.shape
+        if input.shape[0] % 2 != 0:
+            if input.shape[0] == 1:
+                return 0, 0, 0
+            input = input[:-1]
+            target = target[:-1]
+
+        input = self.sigmoid(input)
+
+        loss = self.loss_module(input[::2], input[1::2],
+                                target.new_ones((target.shape[0] // 2,), dtype=torch.get_default_dtype()))
+        num_labels, total_loss = gather_statistics(loss, target, self.reduction)
+
+        return loss, num_labels, total_loss
+
+
 class CrossEntropyLoss(nn.Module):
     def __init__(self, config):
         super(CrossEntropyLoss, self).__init__()
@@ -38,15 +91,7 @@ class CrossEntropyLoss(nn.Module):
             assert self.weight.shape[0] == input.shape[1]
 
         loss = self.loss_module(input, target)
-
-        # count the number of targets
-        num_labels = reduce(lambda x, y: x * y, target.shape, 1)
-
-        # calculate total_loss
-        if self.reduction != "none":
-            total_loss = loss.item() * (num_labels if self.reduction == "elementwise_mean" else 1)
-        else:
-            total_loss = torch.sum(loss).item()
+        num_labels, total_loss = gather_statistics(loss, target, self.reduction)
 
         return loss, num_labels, total_loss
 
@@ -84,15 +129,7 @@ class BCEWithLogitsLoss(nn.Module):
             assert self.pos_weight.shape[0] == input.shape[-1]
 
         loss = self.loss_module(input, target.to(dtype=torch.get_default_dtype()))
-
-        # count the number of targets
-        num_labels = reduce(lambda x, y: x * y, target.shape, 1)
-
-        # calculate total_loss
-        if self.reduction != "none":
-            total_loss = loss.item() * (num_labels if self.reduction == "elementwise_mean" else 1)
-        else:
-            total_loss = torch.sum(loss).item()
+        num_labels, total_loss = gather_statistics(loss, target, self.reduction)
 
         return loss, num_labels, total_loss
 
