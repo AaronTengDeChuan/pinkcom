@@ -1,5 +1,5 @@
 local dataset_dir = "/users5/sychen/pinkcom/data";
-local bert_model_dir = "//users5/sychen/bert/uncased_L-12_H-768_A-12";
+local bert_model_dir = "/users5/sychen/bert/uncased_L-12_H-768_A-12";
 local log_dir = "/users5/sychen/pinkcom/logs";
 local model_dir = "/users5/sychen/pinkcom/model";
 local test_model = "model.pkl";
@@ -123,6 +123,7 @@ local model_name = "bert_for_dstc";
             "validation": [
              #   {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "AN": 2, "K": 1, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 101, "K": 1, "skip": false} },
+                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 101, "K": 2, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 101, "K": 5, "skip": false} },
                 {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 101, "K": 10, "skip": false} },
                 {   "function": "metrics.metric.MAP_in_N", "params": {"N": 101, "skip": false} },
