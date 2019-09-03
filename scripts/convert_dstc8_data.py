@@ -24,14 +24,46 @@ def get_context(dialog):
     context = context.strip() + "\t"
     return context
 
+def get_aug_data(dialog, k):
+    utterances = dialog['messages-so-far']
+
+    correct_answer_rows = []
+    for i in range(max(1, len(utterances)-k), len(utterances)):
+        # Create the context
+        context = ""
+        speaker = None
+        for msg in utterances[:i]:
+            if speaker is None:
+                context += msg['utterance'] + ' '# " __eou__ "
+                speaker = msg['speaker']
+            elif speaker != msg['speaker']:
+                context = context.strip() + "\t" + msg['utterance'] + ' '#" __eou__ "
+                speaker = msg['speaker']
+            else:
+                context += msg['utterance'] + ' '#" __eou__ "
+
+        context = context.strip() + "\t"
+        answer = utterances[i]['utterance'].strip()
+        correct_answer_rows.append('1\t' + context + answer)
+    print(len(utterances), len(correct_answer_rows))
+    assert len(correct_answer_rows) == min(k, len(utterances)-1)
+    return correct_answer_rows
+
 def create_train_file(train_file, train_file_out, opt):
     train_file_op = open(train_file_out, "w")
     positive_samples_count = 0
     negative_samples_count = 0
+    aug_samples_count = 0
 
     train_data_handle = open(train_file, 'rb')
     json_data = ijson.items(train_data_handle, 'item')
     for index, entry in enumerate(json_data):
+        if opt.heuristic_data_augmentation > 0:
+            correct_answer_rows = get_aug_data(entry, min(opt.heuristic_data_augmentation + (opt.heuristic_data_augmentation * index - aug_samples_count), 9))
+            aug_samples_count += len(correct_answer_rows)
+        else:
+            correct_answer_rows = []
+
         # row = str(index+1) + "\t"
         context = get_context(entry)
         row = context #+ "\t"
@@ -46,23 +78,30 @@ def create_train_file(train_file, train_file_out, opt):
         answer = correct_answer['utterance'] #+ " __eou__ "
         answer = answer.strip()
         correct_answer_row = '1\t' + row + answer
-        positive_samples_count += 1
-        train_file_op.write(correct_answer_row.replace("\n", "") + "\n")
+        correct_answer_rows.append(correct_answer_row)
+        correct_answer_num = len(correct_answer_rows)
+        positive_samples_count += correct_answer_num
+        for correct_answer_row in correct_answer_rows:
+            train_file_op.write(correct_answer_row.replace("\n", "") + "\n")
 
         negative_answers = []
+        b_c = 0
         for i, utterance in enumerate(entry['options-for-next']):
             if utterance['candidate-id'] == target_id:
+                b_c += 1
                 continue
             answer = utterance['utterance'] #+ " __eou__ "
             answer = answer.strip()
             negative_answers.append(answer)
-        print('train', target_id, len(negative_answers))
+        #print('train', target_id, len(negative_answers), b_c)
+        #if not (len(negative_answers)==100 if target_id == 'NONE' else len(negative_answers) == 99):
+        #    print('train', target_id, len(negative_answers), b_c)
         if target_id != "NONE":
             answer = "None"# __eou__"
             negative_answers.append(answer)
 
-        negative_samples = random.sample(negative_answers, opt.neg_pos_ratio)
-        assert len(negative_samples) == opt.neg_pos_ratio
+        negative_samples = random.sample(negative_answers, min(opt.neg_pos_ratio * correct_answer_num, len(negative_answers)))
+        assert len(negative_samples) == min(opt.neg_pos_ratio * correct_answer_num, len(negative_answers))
 
         for i in range(len(negative_samples)):
             negative_answer_row = '0\t' + row + negative_samples[i]
@@ -72,6 +111,7 @@ def create_train_file(train_file, train_file_out, opt):
     print("Saved training data to {}".format(train_file_out))
     print("Train - Positive samples count - {}".format(positive_samples_count))
     print("Train - Negative samples count - {}".format(negative_samples_count))
+    print("Train - Augmentation samples count - {}".format(aug_samples_count))
     train_file_op.close()
 
 
@@ -101,13 +141,17 @@ def create_dev_file(dev_file, dev_file_out):
         dev_file_op.write(correct_answer_row.replace("\n", "") + "\n")
 
         negative_answers = []
+        b_c = 0
         for i, utterance in enumerate(entry['options-for-next']):
             if utterance['candidate-id'] == target_id:
+                b_c += 1
                 continue
             answer = utterance['utterance'] #+ " __eou__ "
             answer = answer.strip()
             negative_answers.append(answer)
-        print('valid', target_id, len(negative_answers))
+        #print('valid', target_id, len(negative_answers))
+        #if not (len(negative_answers)==100 if target_id == 'NONE' else len(negative_answers) == 99):
+        #    print('valid', target_id, len(negative_answers), b_c)
         if target_id != "NONE":
             answer = "None"# __eou__"
             negative_answers.append(answer)
@@ -157,17 +201,17 @@ def create_test_file(test_file, test_file_out):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-i', '--train_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/ubuntu/task-1.ubuntu.train.json",
+    parser.add_argument('-i', '--train_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/advising/task-1.advising.train.json",
                            help="Path to input data file")
-    parser.add_argument('-o', '--train_out', type=str, default="/users5/sychen/pinkcom/data/train.txt",
+    parser.add_argument('-o', '--train_out', type=str, default="/users5/sychen/pinkcom/data/advising.train.txt",
                            help="Path to output train file")
-    parser.add_argument('-di', '--dev_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/ubuntu/task-1.ubuntu.dev.json",
+    parser.add_argument('-di', '--dev_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/advising/task-1.advising.dev.json",
                            help="Path to dev data file")
-    parser.add_argument('-do', '--dev_out', type=str, default="/users5/sychen/pinkcom/data/valid.txt",
+    parser.add_argument('-do', '--dev_out', type=str, default="/users5/sychen/pinkcom/data/advising.valid.txt",
                            help="Path to output dev file")
-    parser.add_argument('-ti', '--test_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/ubuntu/task-1.ubuntu.test.json",
+    parser.add_argument('-ti', '--test_in', type=str, default="/users5/sychen/DSTC8_DATA/Task_1/advising/task-1.advising.test.json",
                            help="Path to test data file")
-    parser.add_argument('-to', '--test_out', type=str, default="/users5/sychen/pinkcom/data/test.txt",
+    parser.add_argument('-to', '--test_out', type=str, default="/users5/sychen/pinkcom/data/advising.test.txt",
                            help="Path to output test file")
     #
     # parser.add_argument('-af', '--answers_file', type=str, default="./ans.txt",
@@ -180,6 +224,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-r', '--neg_pos_ratio', type=int, default=10,
                         help="Minimum frequency of words in the vocabulary")
+    parser.add_argument('-a', '--heuristic_data_augmentation', type=int, default=0,
+                        help="ratio num for Heuristic data augmentation method")
     parser.add_argument('-rs', '--random_seed', type=int, default=42,
                         help="Seed for sampling negative training examples")
     opt = parser.parse_args()
