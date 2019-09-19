@@ -140,14 +140,29 @@ class Trainer(object):
 
     def _creat_model(self, embeddings=None):
         model_params = deepcopy(self.trainerParams["model"])
-        logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
-                                                                  json.dumps(model_params["params"], indent=4)))
-        model_params["params"]["device"] = self.device
-        model_params["params"]["embeddings"] = embeddings
-        # put model on specified computing device
-        self.model = utils.name2function(model_params["model_path"])(model_params["params"]).to(device=self.device)
-        self.model = nn.DataParallel(self.model)
-        logger.info("Creating model has been completed.")
+        ensemble = 'model0' in model_params
+        if not ensemble:
+            logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
+                                                                      json.dumps(model_params["params"], indent=4)))
+            model_params["params"]["device"] = self.device
+            model_params["params"]["embeddings"] = embeddings
+            # put model on specified computing device
+            self.model = utils.name2function(model_params["model_path"])(model_params["params"]).to(device=self.device)
+            self.model = nn.DataParallel(self.model)
+            logger.info("Creating model has been completed.")
+        else:
+            self.model = []
+            for model_name in model_params:
+                logger.info("Creating model '{}' with params:\n{}".format(model_params[model_name]["model_path"],
+                                                                          json.dumps(model_params[model_name]["params"], indent=4)))
+                model_params[model_name]["params"]["device"] = self.device
+                model_params[model_name]["params"]["embeddings"] = embeddings
+                # put model on specified computing device
+                model = utils.name2function(model_params[model_name]["model_path"])(model_params[model_name]["params"]).to(
+                    device=self.device)
+                model = nn.DataParallel(model)
+                self.model.append(model)
+                logger.info("Creating model has been completed.")
 
     def _load_metrics(self):
         metrics_params = self.trainerParams["metrics"]
@@ -262,8 +277,14 @@ class Trainer(object):
         else:
             # load model in evaluate
             model_file = self.trainerParams["evaluate"]["test_model_file"]
-            logger.info("Loading model from {} ...".format(model_file))
-            self.model.load_state_dict(torch.load(model_file))
+            ensemble = 'file0' in model_file
+            if not ensemble:
+                logger.info("Loading model from {} ...".format(model_file))
+                self.model.load_state_dict(torch.load(model_file))
+            else:
+                for model_idx, file_name in enumerate(model_file):
+                    logger.info("Loading model from {} ...".format(model_file[file_name]))
+                    self.model[model_idx].load_state_dict(torch.load(model_file[file_name]))
 
     def save_model(self):
         model_path = self.trainerParams["training"]["model_save_path"]
@@ -470,9 +491,13 @@ class Trainer(object):
     @torch.no_grad()
     def evaluate(self, validation=False):
 
+        ensemble = isinstance(self.model, list)
         # utils.output_model_params_and_grad(self.model.module)
-
-        self.model.eval()
+        if not ensemble:
+            self.model.eval()
+        else:
+            for model in self.model:
+                model.eval()
         # metric result
         verbose_results = {}
         # predictions
@@ -519,7 +544,10 @@ class Trainer(object):
             # self.model = nn.DataParallel(self.model)
             # evaluate and output predictions
             for batch, inputs in enumerate(self.evaluate_data_manager):
-                pred = self.model(inputs)
+                if not ensemble:
+                    pred = self.model(inputs)
+                else:
+                    pred = torch.mean(torch.cat([model(inputs).unsqueeze(-1) for model in self.model], dim=-1), dim=-1)
                 # calculate metrics
                 self._accumulate_metrics("evaluate", verbose_results, pred, inputs["target"])
                 self._accumulate_predictions(predictions, pred, inputs)
