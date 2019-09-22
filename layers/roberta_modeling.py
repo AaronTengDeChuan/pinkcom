@@ -29,7 +29,7 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-from .bert_modeling import BertEmbeddings, BertLayerNorm, gelu, swish
+from .bert_modeling import BertEmbeddings, gelu, swish
 from utils.roberta_file_utils import cached_path
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,13 @@ ROBERTA_PRETRAINED_CONFIG_ARCHIVE_MAP = {
     'roberta-large': "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-large-config.json",
     'roberta-large-mnli': "https://s3.amazonaws.com/models.huggingface.co/bert/roberta-large-mnli-config.json",
 }
+
+
+try:
+    from apex.normalization.fused_layer_norm import FusedLayerNorm as BertLayerNorm
+except (ImportError, AttributeError) as e:
+    logger.info("Better speed can be achieved with apex installed from https://www.github.com/nvidia/apex .")
+    BertLayerNorm = torch.nn.LayerNorm
 
 
 class PretrainedConfig(object):
