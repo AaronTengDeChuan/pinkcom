@@ -23,7 +23,7 @@ import six
 import copy
 from io import open
 
-from .bert_file_utils import cached_path
+from .roberta_file_utils import cached_path
 
 logger = logging.getLogger(__name__)
 
