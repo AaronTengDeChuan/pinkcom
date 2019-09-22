@@ -30,7 +30,7 @@ import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
 from .bert_modeling import BertEmbeddings, BertLayerNorm, gelu, swish
-from utils.bert_file_utils import cached_path
+from utils.roberta_file_utils import cached_path
 
 logger = logging.getLogger(__name__)
 
