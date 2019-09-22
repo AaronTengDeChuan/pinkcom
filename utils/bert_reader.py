@@ -442,6 +442,7 @@ def convert_examples_to_features_for_bert_sequence_classification(examples, labe
         if tokenizer.eos_token:
             tokens.append(tokenizer.eos_token)
             segment_ids.append(0)
+            max_tokens_for_doc -= 1
         tokens.append(tokenizer.sep_token)
         segment_ids.append(0)
 
