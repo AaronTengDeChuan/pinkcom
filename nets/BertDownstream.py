@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from layers.bert_modeling import BertConfig, PreTrainedBertModel, BertModel, BertForSequenceClassification
+from layers.roberta_modeling import RobertaForSequenceClassification
 import layers.operations as op
 from utils.bert_tokenization import BertTokenizer
 from utils import utils
@@ -41,8 +42,11 @@ def optimizer_grouped_parameters(model, optimizer_params, model_params):
 
 def output_result(predictions, config):
     file_name = config["file_name"]
-    tokenizer = BertTokenizer.from_pretrained(config["bert_model_dir"], do_lower_case=config["do_lower_case"])
-    separator = " [SEP] "
+    tokenizer = BertTokenizer
+    if "tokenizier" in config:
+        tokenizer = tokenizer = utils.name2function(config["tokenizier"])
+    tokenizer = tokenizer.from_pretrained(config["bert_model_dir"], do_lower_case=config["do_lower_case"])
+    separator = " " + tokenizer.sep_token + " "
 
     inputs = predictions[2]
     score = predictions[0][0]
@@ -58,7 +62,7 @@ def output_result(predictions, config):
         for i in range(len(predictions[0])):
             tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][i][:inputs["input_mask"][i].count(1)])
             sentences = " ".join(tokens[1:-1]).split(separator)
-            if i % 10 == 0:
+            if i % 100 == 0:
                 f.write("CONTEXT:\n" + "\n".join(sentences[1:]) + "\n")
                 f.write(
                     template.format("SCORE".ljust(score_length), "PREDICTION".ljust(prediction_length),
@@ -67,7 +71,7 @@ def output_result(predictions, config):
             f.write(
                 template.format(" ".join([str(s) for s in scores]), str(predictions[1][i]).center(prediction_length),
                                 str(inputs["target"][i]).center(gold_length), sentences[0]))
-            if i % 10 == 9:
+            if i % 100 == 99:
                 f.write("\n")
 
 
@@ -152,6 +156,25 @@ class MultiTurnBert(nn.Module):
         response_output, response_hn = op.pack_and_pad_sequences_for_rnn(rnn_input, response_len - 2, self.rnn)
 
         logits = self.classifier(response_hn.transpose(0, 1).view(response_output.size(0), -1))
+
+        return logits.squeeze(-1)
+
+
+class RobertaForMultiTurnResponseSelection(nn.Module):
+    def __init__(self, config):
+        super(RobertaForMultiTurnResponseSelection, self).__init__()
+        self.final_out_features = config["final_out_features"] if "final_out_features" in config else 2
+        assert "bert_model_dir" in config
+        self.bert_model_dir = config["bert_model_dir"]
+
+        self.bert_model = RobertaForSequenceClassification.from_pretrained(self.bert_model_dir, cache_dir=None,
+                                                                        num_labels=self.final_out_features)
+
+    def forward(self, inputs):
+        input_ids = inputs["input_ids"]
+        token_type_ids = inputs["segment_ids"]
+        attention_mask = inputs["input_mask"]
+        logits = self.bert_model(input_ids, token_type_ids, attention_mask)
 
         return logits.squeeze(-1)
 

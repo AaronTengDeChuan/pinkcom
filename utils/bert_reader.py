@@ -434,12 +434,15 @@ def convert_examples_to_features_for_bert_sequence_classification(examples, labe
 
         tokens = []
         segment_ids = []
-        tokens.append("[CLS]")
+        tokens.append(tokenizer.cls_token)
         segment_ids.append(0)
         for token in tokens_a:
             tokens.append(token)
             segment_ids.append(0)
-        tokens.append("[SEP]")
+        if tokenizer.eos_token:
+            tokens.append(tokenizer.eos_token)
+            segment_ids.append(0)
+        tokens.append(tokenizer.sep_token)
         segment_ids.append(0)
 
         if separation:
@@ -450,7 +453,7 @@ def convert_examples_to_features_for_bert_sequence_classification(examples, labe
                 tokens_sent = tokenizer.tokenize(sent)
                 if len(tokens_sent) + count + 1 > max_tokens_for_doc:
                     break
-                tokens.insert(insert_index, "[SEP]")
+                tokens.insert(insert_index, tokenizer.sep_token)
                 segment_ids.insert(insert_index, 1)
                 count += 1
                 for index in range(len(tokens_sent)):
@@ -464,7 +467,7 @@ def convert_examples_to_features_for_bert_sequence_classification(examples, labe
             for token in tokens_b:
                 tokens.append(token)
                 segment_ids.append(1)
-            tokens.append("[SEP]")
+            tokens.append(tokenizer.sep_token)
             segment_ids.append(1)
 
         input_ids = tokenizer.convert_tokens_to_ids(tokens)
@@ -515,7 +518,8 @@ def Ubuntu_data_load_for_bert_sequence_classification(params):
         "do_lower_case": None,
         "separation": False,
         "max_seq_length": 384,
-        "max_response_length": 50
+        "max_response_length": 50,
+        "tokenizier": "utils.bert_tokenization.BertTokenizer"
     }
     default_params.update(params)
     assert default_params["dataset_dir"] and os.path.exists(default_params["dataset_dir"])
@@ -535,7 +539,8 @@ def Ubuntu_data_load_for_bert_sequence_classification(params):
     def bert_process():
         assert "bert_model_dir" in default_params and default_params["bert_model_dir"] is not None
         assert "do_lower_case" in default_params and default_params["do_lower_case"] is not None
-        tokenizer = BertTokenizer.from_pretrained(default_params["bert_model_dir"],
+        tokenizer = utils.name2function(default_params["tokenizier"])
+        tokenizer = tokenizer.from_pretrained(default_params["bert_model_dir"],
                                                   do_lower_case=default_params["do_lower_case"])
 
         features = None
