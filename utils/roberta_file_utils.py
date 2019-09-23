@@ -52,7 +52,9 @@ WEIGHTS_NAME = "pytorch_model.bin"
 TF_WEIGHTS_NAME = 'model.ckpt'
 CONFIG_NAME = "config.json"
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+from utils import utils
+logger = utils.get_logger()
+#logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 if not six.PY2:
     def add_start_docstrings(*docstr):

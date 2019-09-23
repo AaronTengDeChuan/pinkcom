@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from tqdm import tqdm
 
 from optimizers.optimizer import Optimizer
 
@@ -140,7 +141,7 @@ class Trainer(object):
 
     def _creat_model(self, embeddings=None):
         model_params = deepcopy(self.trainerParams["model"])
-        ensemble = 'model0' in model_params
+        ensemble = 'model_0' in model_params
         if not ensemble:
             logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
                                                                       json.dumps(model_params["params"], indent=4)))
@@ -277,7 +278,7 @@ class Trainer(object):
         else:
             # load model in evaluate
             model_file = self.trainerParams["evaluate"]["test_model_file"]
-            ensemble = 'file0' in model_file
+            ensemble = 'file_0' in model_file
             if not ensemble:
                 logger.info("Loading model from {} ...".format(model_file))
                 self.model.load_state_dict(torch.load(model_file))
@@ -401,7 +402,7 @@ class Trainer(object):
                 log_total_labels += num_labels
                 log_total_loss += batch_total_loss
 
-                if (batch_in_epoch + 1) % training_params["log_interval"] == 0:
+                if (batch_in_epoch + 1) % training_params["log_interval"] < 1:
                     # training log
                     cur_loss = log_total_loss / log_total_labels
                     elapsed = time.time() - log_start_time
@@ -410,7 +411,7 @@ class Trainer(object):
                         "\n| epoch {:3d} | {:5d}/{:5d} batches | time {:5.2f}s | {:5.2f} ms/batch | loss {:8.5f} "
                         "| lr {} | best model in epoch {:3d}".format(
                             epoch, batch_in_epoch + 1, self.epoch_total_batches, elapsed, speed, cur_loss,
-                            self.lr_scheduler.get_lr(), self.best_epoch))
+                            self.optimizer.get_lr()[0], self.best_epoch))
                     # log level
                     log_start_time = time.time()
                     log_total_labels = 0
@@ -543,11 +544,12 @@ class Trainer(object):
             verbose_results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
             # self.model = nn.DataParallel(self.model)
             # evaluate and output predictions
-            for batch, inputs in enumerate(self.evaluate_data_manager):
+            for batch, inputs in tqdm(enumerate(self.evaluate_data_manager)):
                 if not ensemble:
                     pred = self.model(inputs)
                 else:
-                    pred = torch.mean(torch.cat([model(inputs).unsqueeze(-1) for model in self.model], dim=-1), dim=-1)
+                    preds = [model(inputs).unsqueeze(-1) for model in self.model]
+                    pred = torch.mean(torch.cat(preds, dim=-1), dim=-1)
                 # calculate metrics
                 self._accumulate_metrics("evaluate", verbose_results, pred, inputs["target"])
                 self._accumulate_predictions(predictions, pred, inputs)

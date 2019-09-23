@@ -174,7 +174,7 @@ class RobertaForMultiTurnResponseSelection(nn.Module):
         input_ids = inputs["input_ids"]
         token_type_ids = inputs["segment_ids"]
         attention_mask = inputs["input_mask"]
-        logits = self.bert_model(input_ids, token_type_ids, attention_mask)
+        logits = self.bert_model(input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)[0]
 
         return logits.squeeze(-1)
 

@@ -32,7 +32,8 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from .bert_modeling import gelu, swish
 from utils.roberta_file_utils import cached_path
 
-logger = logging.getLogger(__name__)
+from utils import utils
+logger = utils.get_logger()
 
 WEIGHTS_NAME = "pytorch_model.bin"
 TF_WEIGHTS_NAME = 'model.ckpt'
@@ -331,12 +332,11 @@ class BertEmbeddings(nn.Module):
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids)
-
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        #token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
-        embeddings = words_embeddings + position_embeddings + token_type_embeddings
+        embeddings = words_embeddings + position_embeddings #+ token_type_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings

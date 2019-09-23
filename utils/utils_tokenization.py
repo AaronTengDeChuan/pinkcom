@@ -25,7 +25,9 @@ from io import open
 
 from .roberta_file_utils import cached_path
 
-logger = logging.getLogger(__name__)
+from utils import utils
+logger = utils.get_logger()
+#logger = logging.getLogger(__name__)
 
 SPECIAL_TOKENS_MAP_FILE = 'special_tokens_map.json'
 ADDED_TOKENS_FILE = 'added_tokens.json'

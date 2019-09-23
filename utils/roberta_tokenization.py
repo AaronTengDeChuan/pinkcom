@@ -33,7 +33,9 @@ except ImportError:
     def lru_cache():
         return lambda func: func
 
-logger = logging.getLogger(__name__)
+from utils import utils
+logger = utils.get_logger()
+#logger = logging.getLogger(__name__)
 
 VOCAB_FILES_NAMES = {
     'vocab_file': 'vocab.json',
