@@ -326,6 +326,8 @@ class Trainer(object):
         training_params["num_epochs"] = int(training_params["num_epochs"])
         training_params["log_interval"] = int(training_params["log_interval"])
         training_params["validation_interval"] = int(training_params["validation_interval"])
+        training_params["gradient_accumulation"] = int(
+            training_params["gradient_accumulation"]) if "gradient_accumulation" in training_params else 1
         best_valid_metric = None
         self.early_stopping_count = 0
         self.early_stopping_flag = False
@@ -372,21 +374,25 @@ class Trainer(object):
             log_total_labels = 0
             log_total_loss = 0
 
+            self.optimizer.zero_grad()
             for batch_in_epoch, inputs in enumerate(self.training_data_manager):
                 if self.early_stopping_flag: break
                 self.model.train()
-                self.optimizer.zero_grad()
 
                 pred = self.model(inputs)
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 if isinstance(loss, torch.Tensor): loss.backward()
-                # utils.output_model_params_and_grad(self.model)
-                if "grad_clipping" in training_params and training_params["grad_clipping"] > 0:
-                    # nn.utils.clip_grad_norm_(self.model.parameters(), training_params["grad_clipping"])
-                    nn.utils.clip_grad_value_(self.model.parameters(), training_params["grad_clipping"])
-                self.lr_scheduler.step()
-                self.optimizer.step()
+
+                if (batch_in_epoch+1) % training_params["gradient_accumulation"] == 0:
+                    # utils.output_model_params_and_grad(self.model)
+                    if "grad_clipping" in training_params and training_params["grad_clipping"] > 0:
+                        # nn.utils.clip_grad_norm_(self.model.parameters(), training_params["grad_clipping"])
+                        nn.utils.clip_grad_value_(self.model.parameters(), training_params["grad_clipping"])
+                    self.lr_scheduler.step()
+                    self.optimizer.step()
+
+                    self.optimizer.zero_grad()
 
                 if data_parallel: self.model.module.num_updates += 1
                 else: self.model.num_updates += 1
