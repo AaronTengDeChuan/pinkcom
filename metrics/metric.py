@@ -16,7 +16,55 @@ import codecs
 
 logger = utils.get_logger()
 
-class Recall_N_at_K(object):
+
+class Ranking_Metric(object):
+    def __init__(self, config):
+        config = utils.lower_dict(config, recursive=True)
+        self.config = config
+        self.N = config["n"] if "n" in config else 10
+        self.AN = config["an"] if 'an' in config else self.N
+        self.skip = config["skip"] if "skip" in config else False
+
+    def ops(self, y_pred, y_true):
+        # TODO: check this
+        y_pred = torch.squeeze(y_pred)
+        y_true = torch.squeeze(y_true)
+        # varname(y_pred)
+        # varname(y_true)
+        assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
+        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
+        y_true = y_true.tolist()
+
+        x = len(y_pred) // self.N
+        metric_sum = 0.
+        for i in range(x):
+            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
+            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
+            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
+
+            y_p = pt_temp[0][:self.AN][::-1]
+            y_t = pt_temp[1][:self.AN][::-1]
+            total = sum(y_t)
+
+            if not self.is_valid(total): x -= 1; continue
+
+            c = list(zip(y_p, y_t))
+            c = sorted(c, key=lambda x: x[0], reverse=True)
+
+            metric = self.calculate(c, total)
+
+            metric_sum += metric
+
+        return metric_sum, x
+
+    def is_valid(self, total_correct):
+        if total_correct == 0 or total_correct ==self.AN:
+            return False
+        else:
+            return True
+
+
+class Recall_N_at_K(Ranking_Metric):
     '''
     Input:
         Designed for 2 or 1 classes
@@ -37,169 +85,72 @@ class Recall_N_at_K(object):
             i.e. i i+x i+2x ... i+(N-1)x [Default: False]
     '''
     def __init__(self, config):
-        config = utils.lower_dict(config, recursive=True)
-        self.N = config["n"] if "n" in config else 10
-        self.AN = config["an"] if 'an' in config else self.N
-        self.K = config["k"] if "k" in config else 1
-        assert self.AN >= self.K
-        self.skip = config["skip"] if "skip" in config else False
+        super(Recall_N_at_K, self).__init__(config)
+        self.K = self.config["k"] if "k" in self.config else 1
+        assert self.AN >= self.K and self.AN <= self.N
         self.name = "R{}@{}".format(self.AN, self.K)
         logger.info(
             utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "K", self.K, "skip", self.skip))
 
-    def ops(self, y_pred, y_true):
-        # TODO: check this
-        y_pred = torch.squeeze(y_pred)
-        y_true = torch.squeeze(y_true)
-        # varname(y_pred)
-        # varname(y_true)
-        assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:,1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
-        y_true = y_true.tolist()
-
-        x = len(y_pred) // self.N
-        total_recall = 0.
-        for i in range(x):
-            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
-            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
-            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
-
-            y_p = pt_temp[0][:self.AN][::-1]
-            y_t = pt_temp[1][:self.AN][::-1]
-            total = sum(y_t)
-            if total == 0: x -= 1; continue
-
-            c = list(zip(y_p, y_t))
-            c = sorted(c, key=lambda x: x[0], reverse=True)
-            recall = 0. + [pt[1] for pt in c][:self.K].count(1)
-            total_recall += recall / total
-        return total_recall, x
+    def calculate(self, sorted_sequence, num_correct):
+        recall = 0. + [pt[1] for pt in sorted_sequence][:self.K].count(1)
+        return recall / num_correct
 
 
-class MAP_in_N(object):
+class MAP_in_N(Ranking_Metric):
     '''
     Mean Average Precision
     P -> AP -> MAP
     '''
     def __init__(self, config):
-        config = utils.lower_dict(config, recursive=True)
-        self.N = config["n"] if "n" in config else 10
-        self.AN = config["an"] if 'an' in config else self.N
+        super(MAP_in_N, self).__init__(config)
         assert self.AN <= self.N
-        self.skip = config["skip"] if "skip" in config else False
         self.name = "MAP_in_{}".format(self.AN)
         logger.info(
             utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "skip", self.skip))
 
-    def ops(self, y_pred, y_true):
-        y_pred = torch.squeeze(y_pred)
-        y_true = torch.squeeze(y_true)
-        assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
-        y_true = y_true.tolist()
-
-        x = len(y_pred) // self.N
-        APs = 0
-        for i in range(x):
-            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
-            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
-            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
-
-            y_p = pt_temp[0][:self.AN][::-1]
-            y_t = pt_temp[1][:self.AN][::-1]
-            total = sum(y_t)
-            if total == 0: x -= 1; continue
-
-            c = list(zip(y_p, y_t))
-            c = sorted(c, key=lambda x: x[0], reverse=True)
-            num_refs = 0
-            Ps = 0
-            for index in range(self.AN):
-                if c[index][1] == 1:
-                    num_refs += 1
-                    Ps += 1.0 * num_refs / (index + 1)
-            APs += Ps / num_refs
-        return APs, x
+    def calculate(self, sorted_sequence, num_correct):
+        num_refs = 0
+        Ps = 0
+        for index in range(self.AN):
+            if sorted_sequence[index][1] == 1:
+                num_refs += 1
+                Ps += 1.0 * num_refs / (index + 1)
+        return Ps / num_refs
 
 
-class MRR_in_N(object):
+class MRR_in_N(Ranking_Metric):
     '''
     Mean Reciprocal Rank
     '''
     def __init__(self, config):
-        config = utils.lower_dict(config, recursive=True)
-        self.N = config["n"] if "n" in config else 10
-        self.AN = config["an"] if 'an' in config else self.N
+        super(MRR_in_N, self).__init__(config)
         assert self.AN <= self.N
-        self.skip = config["skip"] if "skip" in config else False
         self.name = "MRR_in_{}".format(self.AN)
         logger.info(
             utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "skip", self.skip))
 
-    def ops(self, y_pred, y_true):
-        y_pred = torch.squeeze(y_pred)
-        y_true = torch.squeeze(y_true)
-        assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
-        y_true = y_true.tolist()
-
-        x = len(y_pred) // self.N
-        RRs = 0
-        for i in range(x):
-            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
-            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
-            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
-
-            y_p = pt_temp[0][:self.AN][::-1]
-            y_t = pt_temp[1][:self.AN][::-1]
-            total = sum(y_t)
-            if total == 0: x -= 1; continue
-
-            c = list(zip(y_p, y_t))
-            c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
-            assert 1 in c
-            RRs += 1.0 / (1 + c.index(1))
-        return RRs, x
+    def calculate(self, sorted_sequence, num_correct):
+        c = [pt[1] for pt in sorted_sequence]
+        assert 1 in c
+        return 1.0 / (1 + c.index(1))
 
 
-class Precision_N_at_K(object):
+class Precision_N_at_K(Ranking_Metric):
     '''
     Precision among top k
     '''
     def __init__(self, config):
-        config = utils.lower_dict(config, recursive=True)
-        self.N = config["n"] if "n" in config else 10
-        self.AN = config["an"] if 'an' in config else self.N
-        self.K = config["k"] if "k" in config else 1
-        assert self.AN >= self.K
-        self.skip = config["skip"] if "skip" in config else False
+        super(Precision_N_at_K, self).__init__(config)
+        self.K = self.config["k"] if "k" in self.config else 1
+        assert self.AN >= self.K and self.AN <= self.N
         self.name = "Precision_{}@{}".format(self.AN, self.K)
         logger.info(
             utils.generate_module_info(self.name, "N", self.N, "AN", self.AN, "K", self.K, "skip", self.skip))
 
-    def ops(self, y_pred, y_true):
-        y_pred = torch.squeeze(y_pred)
-        y_true = torch.squeeze(y_true)
-        assert y_pred.shape[0] == y_true.shape[0] and y_pred.shape[0] % self.N == 0
-        y_pred = y_pred[:, 1].tolist() if len(y_pred.shape) == 2 else y_pred.tolist()
-        y_true = y_true.tolist()
-
-        x = len(y_pred) // self.N
-        Ps = 0
-        for i in range(x):
-            p_temp = y_pred[i::x] if self.skip else y_pred[i * self.N: (i + 1) * self.N]
-            t_temp = y_true[i::x] if self.skip else y_true[i * self.N: (i + 1) * self.N]
-            pt_temp = list(zip(*sorted(list(zip(p_temp, t_temp)), key=lambda x: x[1], reverse=True)))
-
-            y_p = pt_temp[0][:self.AN][::-1]
-            y_t = pt_temp[1][:self.AN][::-1]
-            total = sum(y_t)
-            if total == 0: x -= 1; continue
-
-            c = list(zip(y_p, y_t))
-            c = [pt[1] for pt in sorted(c, key=lambda x: x[0], reverse=True)]
-            Ps += 1.0 if 1 in c[:self.K] else 0
-        return Ps, x
+    def calculate(self, sorted_sequence, num_correct):
+        c = [pt[1] for pt in sorted_sequence]
+        return 1.0 if 1 in c[:self.K] else 0
 
 
 class Accurary(object):

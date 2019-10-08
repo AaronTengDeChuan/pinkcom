@@ -220,7 +220,7 @@ def ubuntu_emb_load(params):
     return embeddings
 
 
-# TODO: Related to DAM
+# TODO: Label Smoothing
 
 def DAM_ubuntu_data_load(params):
     default_params = {
@@ -229,6 +229,7 @@ def DAM_ubuntu_data_load(params):
         "training_files": ["data.pkl"],
         "evaluate_files": ["test_data.pkl"],
         "vocabulary_file": "word2id",
+        "vocabulary_size": None,
         "eos_id": 28270,
         "empty_sequence_length": 0,
         "max_num_utterance": 10,
@@ -267,6 +268,12 @@ def DAM_ubuntu_data_load(params):
             if not all(key in inputs for key in keys[:3]):
                 with open(os.path.join(default_params["dataset_dir"], training_files[0]), 'rb') as f:
                     training_data, validation_data, evaluate_data = pickle.load(f)
+                    assert len(training_data['c']) == len(training_data['r']) \
+                           and len(training_data['r']) == len(training_data['y'])
+                    assert len(validation_data['c']) == len(validation_data['r']) \
+                           and len(validation_data['r']) == len(validation_data['y'])
+                    assert len(evaluate_data['c']) == len(evaluate_data['r']) \
+                           and len(evaluate_data['r']) == len(evaluate_data['y'])
                 with open(os.path.join(default_params["dataset_dir"], evaluate_files[0]), 'wb') as f:
                     pickle.dump(evaluate_data, f)
                 inputs['c'] = validation_data['c'] + training_data['c']
@@ -407,6 +414,12 @@ def DAM_ubuntu_data_load(params):
     history, history_len, response_features, true_utt, true_utt_len, labels = \
         results["history"], results["history_len"], results["response_features"], results["true_utt"], \
         results["true_utt_len"], results["labels"]
+
+    vocabulary_size = default_params["vocabulary_size"]
+    if vocabulary_size is not None:
+        logger.warn("Replace ids exceeding {} with the unknown word id.".format(vocabulary_size -1 ))
+        history = np.where(history < vocabulary_size, history, 1)
+        true_utt = np.where(true_utt < vocabulary_size, true_utt, 1)
 
     utt_num = np.sum(history_len != 0, axis=-1, dtype=np_dtype)
 

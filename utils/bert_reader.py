@@ -92,7 +92,7 @@ class MtrsProcessor(DataProcessor):
 
     def _create_examples(self, lines, set_type):
         examples = []
-        for (i, line) in enumerate(lines):
+        for (i, line) in enumerate(tqdm(lines, desc="Process Raw {} Text".format(set_type))):
             guid = "%s-%s" % (set_type, i)
             response = line[-1]
             context = line[1: -1]
