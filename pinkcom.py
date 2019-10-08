@@ -46,27 +46,21 @@ if __name__ == "__main__":
                         help='Location of config file')
     args = parser.parse_args()
 
-    config_file = args.config
-    config_file_type = config_file.split('.')[-1]
-    # load config file
-    config = None
-    if config_file_type == "jsonnet":
-        config = json.loads(_jsonnet.evaluate_file(config_file))
-    else:
-        config = json.load(open(config_file, 'r'))
     # lower the configuration parameters dict
-    trainerParams = utils.lower_dict(config, recursive=True)
-
-    logger = utils.create_logger(trainerParams["global"]["log_file"])
-
-    logger.info(json.dumps(trainerParams, indent=4))
+    trainerParams = utils.read_config(args.config)
 
     if args.train:
+        logger = utils.create_logger(trainerParams["global"]["log_file"])
+        logger.info(json.dumps(trainerParams, indent=4))
         train(trainerParams, evaluate=args.evaluate)
     elif args.evaluate:
+        # modify the name of log file
+        trainerParams["global"]["log_file"] = trainerParams["global"]["log_file"].rsplit('.', maxsplit=1)[0] + ".evaluation.log"
+        logger = utils.create_logger(trainerParams["global"]["log_file"])
+        logger.info(json.dumps(trainerParams, indent=4))
         evaluate(trainerParams)
     else:
         parser.print_help()
-        logger.error("\n"+parser.format_help())
+        # logger.error("\n"+parser.format_help())
 else:
     logger = utils.get_logger()

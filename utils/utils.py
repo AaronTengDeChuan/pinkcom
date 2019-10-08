@@ -3,6 +3,8 @@
 import inspect
 import re
 import os
+import json
+import _jsonnet
 import logging
 import time
 import math
@@ -39,6 +41,19 @@ def create_logger(log_file, logger_name=LOGGER_NAME):
     logger.addHandler(fh)
     logger.info("Logger '{}' is running.".format(logger.name))
     return logger
+
+
+def read_config(config_file):
+    config_file_type = config_file.split('.')[-1]
+    # load config file
+    config = None
+    if config_file_type == "jsonnet":
+        config = json.loads(_jsonnet.evaluate_file(config_file))
+    else:
+        config = json.load(open(config_file, 'r'))
+    # lower the configuration parameters dict
+    config = lower_dict(config, recursive=True)
+    return config
 
 
 def generate_metrics_str(results, verbose=False):

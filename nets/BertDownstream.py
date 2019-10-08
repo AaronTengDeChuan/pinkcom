@@ -178,6 +178,24 @@ class RobertaForMultiTurnResponseSelection(nn.Module):
 
         return logits.squeeze(-1)
 
+      
+class BertForSequenceRepresentation(nn.Module):
+    def __init__(self, config):
+        super(BertForSequenceRepresentation, self).__init__()
+        self.bert_model = BertModelWrapper.from_pretrained(config["bert_model_dir"], cache_dir=None)
+
+    def forward(self, inputs):
+        utterance_id, utterance_mask, utterance_segment, utterance_len = \
+            inputs["id"], inputs["mask"], inputs["segment"],inputs["len"]
+        encoded_layers, pooled_output = self.bert_model(
+            utterance_id,
+            utterance_segment,
+            utterance_mask,
+            output_all_encoded_layers=False,
+            output_embeddings=False,
+            only_embeddings=False)
+        return pooled_output
+
 
 if __name__ == "__main__":
     vocab_size = 1000

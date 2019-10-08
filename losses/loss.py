@@ -1,6 +1,7 @@
 # coding=utf-8
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from functools import reduce
 import logging
@@ -20,6 +21,15 @@ def gather_statistics(loss, target, reduction):
         total_loss = torch.sum(loss).item()
 
     return num_labels, total_loss
+
+
+def smooth_label(labels, ratio, epsilon=0.1):
+    assert len(labels.shape) == 1
+    assert labels.dtype == torch.int64
+    pos_score = labels.new_full(labels.shape, ((1 - epsilon) * 1) + (epsilon / ratio), dtype=torch.get_default_dtype())
+    neg_score = labels.new_full(labels.shape, ((1 - epsilon) * 0) + (epsilon / ratio), dtype=torch.get_default_dtype())
+    pos_prob = torch.where(labels > 0, pos_score, neg_score)
+    return torch.stack((1 - pos_prob, pos_prob), dim=-1)
 
 
 class MarginRankingLoss(nn.Module):
@@ -96,6 +106,45 @@ class CrossEntropyLoss(nn.Module):
         return loss, num_labels, total_loss
 
 
+class KLDivLoss(nn.Module):
+    def __init__(self, config):
+        super(KLDivLoss, self).__init__()
+        self.size_average = config["size_average"] if "size_average" in config else False
+        self.reduce = config["reduce"] if "reduce" in config else True
+        self.reduction = config["reduction"] if "reduction" in config else "elementwise_mean"
+
+        # parameters for smoothing label
+        self.do_label_smoothing = config["do_label_smoothing"] if "do_label_smoothing" in config else False
+        self.ratio = config["ratio"] if "ratio" in config else 2
+        self.epsilon = config["epsilon"] if "epsilon" in config else 0.1
+
+        self.loss_module = torch.nn.KLDivLoss(size_average=self.size_average, reduce=self.reduce,
+                                              reduction=self.reduction)
+
+        self.name = config["name"] if "name" in config else " KL Divergence Loss"
+        logger.info(
+            utils.generate_module_info(self.name, "size_average", self.size_average, "reduce", self.reduce, "reduction",
+                                       self.reduction))
+
+    def forward(self, input, target):
+        if self.do_label_smoothing:
+            assert input.shape[0] == target.shape[0]
+            target = smooth_label(target, self.ratio, self.epsilon)
+        else:
+            assert input.shape == target.shape
+
+        input = F.log_softmax(input, dim=-1)
+
+        loss = self.loss_module(input, target)
+        num_labels = input.shape[0]
+        total_loss = loss.item()
+        if self.size_average == False:
+            loss /= input.shape[0]
+        else:
+            total_loss *= num_labels
+        return loss, num_labels, total_loss
+
+
 class BCEWithLogitsLoss(nn.Module):
     '''
     This loss combines a Sigmoid layer and the BCELoss which measures the Binary Cross Entropy between the target and the output in one single class.
@@ -122,11 +171,14 @@ class BCEWithLogitsLoss(nn.Module):
                                        self.reduction))
 
     def forward(self, input, target):
-        assert input.shape == target.shape
+        assert input.shape[0] == target.shape[0]
         if self.weight is not None:
             assert self.weight.shape[0] == input.shape[0]
         if self.pos_weight is not None:
             assert self.pos_weight.shape[0] == input.shape[-1]
+
+        if input.shape != target.shape:
+            target = target.unsqueeze(-1).expand(input.shape)
 
         loss = self.loss_module(input, target.to(dtype=torch.get_default_dtype()))
         num_labels, total_loss = gather_statistics(loss, target, self.reduction)

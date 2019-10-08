@@ -18,14 +18,20 @@ def init_embedding(vocabulary_size, word_embedding_size, embeddings=None, embedd
     dtype = torch.get_default_dtype()
     if isinstance(embeddings, np.ndarray):
         # TODO: check whether share the storage
-        assert list(embeddings.shape) == [vocabulary_size, word_embedding_size]
+        assert embeddings.shape[0] >= vocabulary_size and embeddings.shape[1] == word_embedding_size
+        if embeddings.shape[0] != vocabulary_size:
+            logger.warn("The size of embeddings is not equal to that of vocabulary.")
+            embeddings = embeddings[:vocabulary_size]
         embeddings = nn.Embedding.from_pretrained(torch.tensor(embeddings, dtype=dtype), freeze=not embeddings_trainable)
         logger.info("The embeddings are initialized by pretrained embeddings" + (
             "." if embeddings_trainable else " and frozen."))
     elif isinstance(embeddings, torch.Tensor):
         # TODO: check whether share the storage
-        assert dtype == embeddings.dtype \
-               and list(embeddings.shape) == [vocabulary_size, word_embedding_size]
+        assert dtype == embeddings.dtype and embeddings.shape[0] >= vocabulary_size \
+               and embeddings.shape[1] == word_embedding_size
+        if embeddings.shape[0] != vocabulary_size:
+            logger.warn("The size of embeddings is not equal to that of vocabulary.")
+            embeddings = embeddings[:vocabulary_size]
         embeddings = nn.Embedding.from_pretrained(embeddings, freeze=not embeddings_trainable)
         logger.info("The embeddings are initialized by pretrained embeddings" + (
             "." if embeddings_trainable else " and frozen."))

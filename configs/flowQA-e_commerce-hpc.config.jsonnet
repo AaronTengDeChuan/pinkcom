@@ -1,6 +1,5 @@
-# small vocabulary training data follows the modified ESIM designed for multi-turn response selection
-
-local dataset_dir = "/users3/dcteng/work/Dialogue/ESIM-Response-Selection/data/pickle_ubuntu_data";
+local dataset_dir = "data/dua/e-commerce";
+//local dataset_dir = "/users3/dcteng/work/Dialogue/Deep-Utterance-Aggregation/ECD_sample";
 local bert_model_dir = "/users3/dcteng/work/Dialogue/bert/bert-pretrained-models/uncased_L-12_H-768_A-12";
 local use_bert_embeddings = false;
 local bert_trainable = false;
@@ -20,30 +19,35 @@ local model_dir = "models/FlowQA";
 local test_model = "model.pkl";
 
 local language = "zh";
-local last_score = false;
-local emb_trainable = false;
-local bidirectional_dialog_flow = true;
-local lr = 0.0001;
+local last_score = true;
+local emb_trainable = true;
+local bidirectional_dialog_flow = false;
+local lr = 0.0005;
 
-local vocabulary_size = 100000;
+local vocabulary_size = 36131;
+//local vocabulary_size = 1433;
 
 local batch_size = 100;
-local num_validation_examples = 500000;
+local num_validation_examples = 10000;
 local num_training_examples = 1000000;
-//local num_validation_examples = 10000;
-//local num_training_examples = 10000;
+//local num_validation_examples = 154;
+//local num_training_examples = 154;
 local num_log = 100;
 local log_interval = num_training_examples / (batch_size * num_log);
 local num_validation = 5;
 local validation_interval = num_training_examples / (batch_size * num_validation);
-local num_lr_step = 5;
+local num_lr_step = 1;
 local lr_step_size = std.floor(num_training_examples / (batch_size * num_lr_step));
 local lr_gamma = 0.9;
 local dropout = 0.0;
 
-local model_name = "flowqa-small_vocab-vocabulary_%s-emb_trainable_%s-use_bert_emb_%s-bidir_flow_%s-last_score_%s-lr_%s-dropout_%s-valid%s-LS%s_%s"
+//local model_name = "flowqa-e_commerce-vocabulary_%s-emb_trainable_%s-use_bert_emb_%s-bidir_flow_%s-last_score_%s-lr_%s-dropout_%s-valid%s-LS%s_%s"
+//    % [vocabulary_size, emb_trainable, use_bert_embeddings, bidirectional_dialog_flow, last_score,
+//    std.toString(lr)[:6], std.toString(dropout)[:3], num_validation, num_lr_step, std.toString(lr_gamma)[:3]];
+
+local model_name = "flowqa-e_commerce-vocabulary_%s-emb_trainable_%s-use_bert_emb_%s-bidir_flow_%s-last_score_%s-dropout_%s-valid%s-LS%s_%s"
     % [vocabulary_size, emb_trainable, use_bert_embeddings, bidirectional_dialog_flow, last_score,
-    std.toString(lr)[:6], std.toString(dropout)[:3], num_validation, num_lr_step, std.toString(lr_gamma)[:3]];
+    std.toString(dropout)[:3], num_validation, num_lr_step, std.toString(lr_gamma)[:3]];
 
 {
     "data_manager":
@@ -54,16 +58,18 @@ local model_name = "flowqa-small_vocab-vocabulary_%s-emb_trainable_%s-use_bert_e
                     "dataset_dir": dataset_dir,
                     "phase": "training",
                     "training_files": ["data.pkl"],
-                    "evaluate_files": ["test_data.pkl"],
+//                    "evaluate_files": ["test_data.pkl"],
+                    "evaluate_files": ["test_labeled_data.pkl"],
                     "vocabulary_file": "word2id.txt",
 //                    "training_files": ["data_small.pkl"],
 //                    "evaluate_files": ["test_data_small.pkl"],
 //                    "vocabulary_file": "word2id_small.txt",
                     "vocabulary_size": vocabulary_size,
-                    "eos_id": 100000,
+                    "eos_id": 10000000,
                     "empty_sequence_length": 1,
                     "max_num_utterance": 10,
                     "max_sentence_len": 50,
+                    "language": language,
                     "use_bert_embeddings": use_bert_embeddings,
                     "bert_model_dir": bert_model_dir,
                     "do_lower_case": true,
@@ -167,7 +173,7 @@ local model_name = "flowqa-small_vocab-vocabulary_%s-emb_trainable_%s-use_bert_e
             "model_selection": {
                 "reduction": "sum",
                 "mode": "max",
-                "metrics": ["R10@1", "R10@2"]
+                "metrics": ["R2@1"]
             },
             "only_save_best": true,
             "model_save_path": "%s/%s" % [model_dir, model_name]
@@ -179,13 +185,10 @@ local model_name = "flowqa-small_vocab-vocabulary_%s-emb_trainable_%s-use_bert_e
                 {   "function": "metrics.metric.Accurary", "params": {} }
             ],
             "validation": [
-                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "AN": 2, "K": 1, "skip": false} },
-                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 1, "skip": false} },
-                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 2, "skip": false} },
-                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 10, "K": 5, "skip": false} },
-                {   "function": "metrics.metric.MAP_in_N", "params": {"N": 10, "skip": false} },
-                {   "function": "metrics.metric.MRR_in_N", "params": {"N": 10, "skip": false} },
-                {   "function": "metrics.metric.Precision_N_at_K", "params": {"N": 10, "K": 1, "skip": false} },
+                {   "function": "metrics.metric.Recall_N_at_K", "params": {"N": 2, "K": 1, "skip": false} },
+                {   "function": "metrics.metric.MAP_in_N", "params": {"N": 2, "skip": false} },
+                {   "function": "metrics.metric.MRR_in_N", "params": {"N": 2, "skip": false} },
+                {   "function": "metrics.metric.Precision_N_at_K", "params": {"N": 2, "K": 1, "skip": false} },
                 {   "function": "metrics.metric.Accurary", "params": {} }
             ],
             "evaluate": [

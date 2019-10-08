@@ -455,17 +455,15 @@ class FlowQAModel(nn.Module):
         # if self.num_updates == 1425: utils.varname(class_scores)
         # if self.num_updates == 1425: utils.varname(all_class_scores, fn=tensor_info)
 
-        if self.last_score:
+        if self.last_score or not self.training:
         # TODO: Last score
             logits = all_class_scores[:, -1]
         else:
         # TODO: Linear combination
-            utterance_mask = torch.min(x2_full_mask, dim=2)[0]
-            all_class_scores.data.masked_fill_(utterance_mask, 0)
-            logits = self.overall_matching_score(all_class_scores)  # [batch, final_out_features]
-
-            # if self.num_updates == 1425: utils.varname(utterance_mask)
-            # if self.num_updates == 1425: utils.varname(all_class_scores)
+        #     utterance_mask = torch.min(x2_full_mask, dim=2)[0]
+        #     all_class_scores.data.masked_fill_(utterance_mask, 0)
+        #     logits = self.overall_matching_score(all_class_scores)  # [batch, final_out_features]
+            logits = all_class_scores
 
         # if self.num_updates == 1425: utils.varname(logits, fn=tensor_info)
 
