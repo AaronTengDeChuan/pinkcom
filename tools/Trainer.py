@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from tqdm import tqdm
 
 from optimizers.optimizer import Optimizer
 
@@ -140,14 +141,29 @@ class Trainer(object):
 
     def _creat_model(self, embeddings=None):
         model_params = deepcopy(self.trainerParams["model"])
-        logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
-                                                                  json.dumps(model_params["params"], indent=4)))
-        model_params["params"]["device"] = self.device
-        model_params["params"]["embeddings"] = embeddings
-        # put model on specified computing device
-        self.model = utils.name2function(model_params["model_path"])(model_params["params"]).to(device=self.device)
-        self.model = nn.DataParallel(self.model)
-        logger.info("Creating model has been completed.")
+        ensemble = 'model_0' in model_params
+        if not ensemble:
+            logger.info("Creating model '{}' with params:\n{}".format(model_params["model_path"],
+                                                                      json.dumps(model_params["params"], indent=4)))
+            model_params["params"]["device"] = self.device
+            model_params["params"]["embeddings"] = embeddings
+            # put model on specified computing device
+            self.model = utils.name2function(model_params["model_path"])(model_params["params"]).to(device=self.device)
+            self.model = nn.DataParallel(self.model)
+            logger.info("Creating model has been completed.")
+        else:
+            self.model = []
+            for model_name in model_params:
+                logger.info("Creating model '{}' with params:\n{}".format(model_params[model_name]["model_path"],
+                                                                          json.dumps(model_params[model_name]["params"], indent=4)))
+                model_params[model_name]["params"]["device"] = self.device
+                model_params[model_name]["params"]["embeddings"] = embeddings
+                # put model on specified computing device
+                model = utils.name2function(model_params[model_name]["model_path"])(model_params[model_name]["params"]).to(
+                    device=self.device)
+                model = nn.DataParallel(model)
+                self.model.append(model)
+                logger.info("Creating model has been completed.")
 
     def _load_metrics(self):
         metrics_params = self.trainerParams["metrics"]
@@ -262,8 +278,14 @@ class Trainer(object):
         else:
             # load model in evaluate
             model_file = self.trainerParams["evaluate"]["test_model_file"]
-            logger.info("Loading model from {} ...".format(model_file))
-            self.model.load_state_dict(torch.load(model_file))
+            ensemble = 'file_0' in model_file
+            if not ensemble:
+                logger.info("Loading model from {} ...".format(model_file))
+                self.model.load_state_dict(torch.load(model_file))
+            else:
+                for model_idx, file_name in enumerate(model_file):
+                    logger.info("Loading model from {} ...".format(model_file[file_name]))
+                    self.model[model_idx].load_state_dict(torch.load(model_file[file_name]))
 
     def save_model(self):
         model_path = self.trainerParams["training"]["model_save_path"]
@@ -304,6 +326,8 @@ class Trainer(object):
         training_params["num_epochs"] = int(training_params["num_epochs"])
         training_params["log_interval"] = int(training_params["log_interval"])
         training_params["validation_interval"] = int(training_params["validation_interval"])
+        training_params["gradient_accumulation"] = int(
+            training_params["gradient_accumulation"]) if "gradient_accumulation" in training_params else 1
         best_valid_metric = None
         self.early_stopping_count = 0
         self.early_stopping_flag = False
@@ -350,21 +374,25 @@ class Trainer(object):
             log_total_labels = 0
             log_total_loss = 0
 
+            self.optimizer.zero_grad()
             for batch_in_epoch, inputs in enumerate(self.training_data_manager):
                 if self.early_stopping_flag: break
                 self.model.train()
-                self.optimizer.zero_grad()
 
                 pred = self.model(inputs)
                 loss, num_labels, batch_total_loss = self.loss_fn(pred, inputs["target"])
 
                 if isinstance(loss, torch.Tensor): loss.backward()
-                # utils.output_model_params_and_grad(self.model)
-                if "grad_clipping" in training_params and training_params["grad_clipping"] > 0:
-                    # nn.utils.clip_grad_norm_(self.model.parameters(), training_params["grad_clipping"])
-                    nn.utils.clip_grad_value_(self.model.parameters(), training_params["grad_clipping"])
-                self.lr_scheduler.step()
-                self.optimizer.step()
+
+                if (batch_in_epoch+1) % training_params["gradient_accumulation"] == 0:
+                    # utils.output_model_params_and_grad(self.model)
+                    if "grad_clipping" in training_params and training_params["grad_clipping"] > 0:
+                        # nn.utils.clip_grad_norm_(self.model.parameters(), training_params["grad_clipping"])
+                        nn.utils.clip_grad_value_(self.model.parameters(), training_params["grad_clipping"])
+                    self.lr_scheduler.step()
+                    self.optimizer.step()
+
+                    self.optimizer.zero_grad()
 
                 if data_parallel: self.model.module.num_updates += 1
                 else: self.model.num_updates += 1
@@ -380,7 +408,7 @@ class Trainer(object):
                 log_total_labels += num_labels
                 log_total_loss += batch_total_loss
 
-                if (batch_in_epoch + 1) % training_params["log_interval"] == 0:
+                if (batch_in_epoch + 1) % training_params["log_interval"] < 1:
                     # training log
                     cur_loss = log_total_loss / log_total_labels
                     elapsed = time.time() - log_start_time
@@ -389,7 +417,7 @@ class Trainer(object):
                         "\n| epoch {:3d} | {:5d}/{:5d} batches | time {:5.2f}s | {:5.2f} ms/batch | loss {:8.5f} "
                         "| lr {} | best model in epoch {:3d}".format(
                             epoch, batch_in_epoch + 1, self.epoch_total_batches, elapsed, speed, cur_loss,
-                            self.lr_scheduler.get_lr(), self.best_epoch))
+                            self.optimizer.get_lr()[0], self.best_epoch))
                     # log level
                     log_start_time = time.time()
                     log_total_labels = 0
@@ -470,9 +498,13 @@ class Trainer(object):
     @torch.no_grad()
     def evaluate(self, validation=False):
 
+        ensemble = isinstance(self.model, list)
         # utils.output_model_params_and_grad(self.model.module)
-
-        self.model.eval()
+        if not ensemble:
+            self.model.eval()
+        else:
+            for model in self.model:
+                model.eval()
         # metric result
         verbose_results = {}
         # predictions
@@ -518,8 +550,12 @@ class Trainer(object):
             verbose_results.update([(metric.name, [0., 0]) for metric in self.metrics["evaluate"]])
             # self.model = nn.DataParallel(self.model)
             # evaluate and output predictions
-            for batch, inputs in enumerate(self.evaluate_data_manager):
-                pred = self.model(inputs)
+            for batch, inputs in tqdm(enumerate(self.evaluate_data_manager)):
+                if not ensemble:
+                    pred = self.model(inputs)
+                else:
+                    preds = [model(inputs).unsqueeze(-1) for model in self.model]
+                    pred = torch.mean(torch.cat(preds, dim=-1), dim=-1)
                 # calculate metrics
                 self._accumulate_metrics("evaluate", verbose_results, pred, inputs["target"])
                 self._accumulate_predictions(predictions, pred, inputs)

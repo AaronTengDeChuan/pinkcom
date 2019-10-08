@@ -19,20 +19,20 @@ import torch
 from torch.optim import Optimizer
 from torch.nn.utils import clip_grad_norm_
 
-def warmup_cosine(x, warmup=0.002):
+def warmup_cosine(x, warmup=0.002, min_val=1e-8):
     if x < warmup:
         return x/warmup
     return 0.5 * (1.0 + torch.cos(math.pi * x))
 
-def warmup_constant(x, warmup=0.002):
+def warmup_constant(x, warmup=0.002, min_val=1e-8):
     if x < warmup:
         return x/warmup
     return 1.0
 
-def warmup_linear(x, warmup=0.002):
+def warmup_linear(x, warmup=0.002, min_val=1e-8):
     if x < warmup:
         return x/warmup
-    return 1.0 - x
+    return max(1.0 - x, min_val)
 
 SCHEDULES = {
     'warmup_cosine':warmup_cosine,
@@ -144,7 +144,7 @@ class BertAdam(Optimizer):
 
                 if group['t_total'] != -1:
                     schedule_fct = SCHEDULES[group['schedule']]
-                    lr_scheduled = group['lr'] * schedule_fct(state['step']/group['t_total'], group['warmup'])
+                    lr_scheduled = group['lr'] * schedule_fct(state['step']/group['t_total'], group['warmup'], min_val=1.0/group['t_total'])
                 else:
                     lr_scheduled = group['lr']
 
